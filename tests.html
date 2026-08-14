@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tests — Suivi</title>
+<meta name="theme-color" content="#111417">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  :root{
+    --bg:#111417; --card:#1a1e23; --card2:#242a31; --line:#2a2f35; --line2:#343b44;
+    --txt:#e8e6e1; --mut:#9ca3af; --dim:#6b7280; --faint:#4b5563;
+    --teal:#7fb7a3; --blue:#8ab4d8; --amber:#e09f3e;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; background:var(--bg); color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    padding-bottom:env(safe-area-inset-bottom);}
+  .wrap{max-width:430px; margin:0 auto; padding:22px 16px 64px;}
+  h1{font-size:22px; font-weight:600; letter-spacing:-.02em; margin:0;}
+  .mono{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;}
+  .back{display:inline-block; font-size:13px; color:var(--dim); text-decoration:none; margin-bottom:14px;}
+  .sub{font-size:12px; color:var(--dim); margin:4px 0 18px; line-height:1.5;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:10px;}
+  .t-name{font-size:15px; font-weight:500;}
+  .t-meta{font-size:11.5px; color:var(--dim); margin-top:3px;}
+  .t-last{font-size:12px; color:var(--mut); margin-top:8px;}
+  .btn{border-radius:12px; padding:13px; font-size:14px; font-weight:500; border:none; cursor:pointer; width:100%;}
+  .btn-teal{background:var(--teal); color:var(--bg);}
+  .btn-ghost{background:transparent; border:1px solid var(--line); color:var(--dim);}
+  .btn-outline{background:rgba(127,183,163,.10); border:1px solid var(--teal); color:var(--teal);}
+  .row{display:flex; gap:10px; align-items:center;}
+  .label{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); margin:20px 0 8px;}
+  .note{font-size:12px; color:var(--faint); line-height:1.55; margin-top:8px;}
+  .chart{margin-top:12px; border-top:1px solid var(--line); padding-top:10px;}
+  .chart-hd{display:flex; justify-content:space-between; align-items:baseline; font-size:11px; color:var(--dim); margin-bottom:2px;}
+  .chart svg{width:100%; height:52px; display:block; overflow:visible;}
+  .chart-ft{display:flex; justify-content:space-between; font-size:10.5px; color:var(--faint); margin-top:3px;}
+  .nodata{height:34px; display:flex; align-items:center; font-size:11.5px; color:var(--faint);}
+  .qtext{font-size:16px; line-height:1.45; max-width:340px;}
+  .qopts{display:flex; flex-direction:column; gap:8px; width:100%; max-width:320px;}
+  .qopts button{background:var(--card); border:1px solid var(--line); color:var(--txt);
+    border-radius:12px; padding:14px 16px; font-size:14px; text-align:left; cursor:pointer;}
+  .qopts button.on{background:rgba(138,180,216,.14); border-color:var(--blue); color:var(--blue);}
+  .band{font-size:15px; font-weight:500;}
+  .warn{font-size:12.5px; color:var(--amber); line-height:1.5; max-width:340px;}
+
+  /* plein écran de test */
+  #stage{position:fixed; inset:0; background:var(--bg); display:none; flex-direction:column;
+    padding:calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 14px);}
+  #stage.on{display:flex;}
+  .stage-top{display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--dim); min-height:22px;}
+  .stage-mid{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:14px;}
+  .stage-title{font-size:17px; font-weight:600;}
+  .stage-body{font-size:14px; color:var(--mut); line-height:1.6; max-width:340px;}
+  .counter{font-size:52px; letter-spacing:-.02em; color:var(--amber);}
+  .stim{width:120px; height:120px; border-radius:50%; border:2px solid var(--line2);
+    display:flex; align-items:center; justify-content:center;}
+  .stim.on{border-color:var(--amber); background:rgba(224,159,62,.10);}
+  .flash{font-size:15px; color:var(--amber); min-height:22px;}
+  .glyph{font-size:64px; line-height:1;}
+  .keyrow{display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-bottom:6px;}
+  .keypair{background:var(--card); border:1px solid var(--line); border-radius:8px;
+    padding:5px 8px; display:flex; flex-direction:column; align-items:center; min-width:36px;}
+  .keypair .s{font-size:19px; line-height:1.1;} .keypair .d{font-size:11px; color:var(--dim);}
+  .pad{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; width:100%; max-width:300px;}
+  .pad button{background:var(--card2); border:1px solid var(--line2); color:var(--txt);
+    border-radius:12px; padding:16px 0; font-size:20px; cursor:pointer;}
+  .tapbig{width:100%; max-width:300px; border-radius:16px; padding:34px 0; font-size:19px; font-weight:600;
+    background:rgba(127,183,163,.12); border:1px solid var(--teal); color:var(--teal); cursor:pointer;}
+  .bigcount{font-size:64px; letter-spacing:-.03em;}
+  .res{font-size:14px; color:var(--mut); line-height:1.7; text-align:left; max-width:340px;}
+  .res b{color:var(--txt); font-weight:500;}
+  .hist{font-size:12.5px; color:var(--mut); line-height:1.6;}
+  .hist .d{color:var(--dim);}
+  .rod{color:var(--amber);}
+  .hidden{display:none;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">‹ Suivi</a>
+  <h1>Tests</h1>
+  <p class="sub">Instruments de mesure, pas d'entraînement. Toujours au même créneau horaire, même état caféine. Seule la tendance sur plusieurs semaines veut dire quelque chose.</p>
+
+  <div class="card">
+    <div class="t-name">PVT-B — attention soutenue</div>
+    <div class="t-meta">3 min · effet d'apprentissage quasi nul</div>
+    <div class="t-last" id="last-pvt"></div>
+    <div class="chart" id="ch-pvt"></div>
+    <div style="margin-top:12px"><button class="btn btn-outline" onclick="startPVT()">Lancer</button></div>
+  </div>
+
+  <div class="card">
+    <div class="t-name">Substitution symboles-chiffres</div>
+    <div class="t-meta">90 s · vitesse de traitement</div>
+    <div class="t-last" id="last-sdmt"></div>
+    <div class="chart" id="ch-sdmt"></div>
+    <div style="margin-top:12px"><button class="btn btn-outline" onclick="startSDMT()">Lancer</button></div>
+  </div>
+
+  <div class="card">
+    <div class="t-name">Fluence verbale</div>
+    <div class="t-meta">2 × 60 s · accès au lexique, à voix haute</div>
+    <div class="t-last" id="last-flu"></div>
+    <div class="chart" id="ch-flu"></div>
+    <div style="margin-top:12px"><button class="btn btn-outline" onclick="startFlu()">Lancer</button></div>
+  </div>
+
+  <div class="card">
+    <div class="t-name">PHQ-8 — humeur</div>
+    <div class="t-meta">8 items · deux dernières semaines · mensuel</div>
+    <div class="t-last" id="last-phq"></div>
+    <div class="chart" id="ch-phq"></div>
+    <div style="margin-top:12px"><button class="btn btn-outline" onclick="startPHQ()">Lancer</button></div>
+  </div>
+
+  <div class="label">Historique</div>
+  <div class="card"><div class="hist" id="hist"></div></div>
+
+  <button class="btn btn-teal" id="cpb" onclick="copyResults()">Copier les résultats</button>
+  <div class="row" style="margin-top:10px">
+    <button class="btn btn-ghost" onclick="exportJSON()">Exporter (backup)</button>
+    <button class="btn btn-ghost" onclick="document.getElementById('imp').click()">Importer</button>
+  </div>
+  <input type="file" id="imp" accept=".json" class="hidden" onchange="importJSON(this)">
+  <p class="note">Données stockées sur ce téléphone uniquement, séparément du suivi quotidien. Les valeurs absolues du PVT incluent la latence de l'écran tactile : elles ne se comparent pas à des normes publiées, seulement à tes propres runs.</p>
+</div>
+
+<div id="stage">
+  <div class="stage-top">
+    <span id="stage-label"></span>
+    <span id="stage-timer" class="mono"></span>
+    <span><button id="stage-quit" class="btn btn-ghost" style="width:auto;padding:5px 12px;font-size:12px" onclick="quitStage()">Quitter</button></span>
+  </div>
+  <div class="stage-mid" id="stage-mid"></div>
+</div>
+
+<script>
+// ---------- stockage ----------
+const KEY = "suivi_tests_v1";
+let T = load();
+
+function load(){
+  try{ const r = localStorage.getItem(KEY); if(r) return JSON.parse(r); }catch(e){}
+  return { runs: [] };
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(T)); }
+  catch(e){ alert("Échec de sauvegarde. Exporte tes données en JSON."); }
+}
+function addRun(test, metrics){
+  T.runs.push({ id:Date.now(), ts:new Date().toISOString(), day:today(), test, metrics });
+  save(); renderHome();
+}
+
+// ---------- dates ----------
+function today(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function frShort(k){ const [y,m,d]=k.split("-").map(Number); return new Date(y,m-1,d).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"}); }
+function hhmm(iso){ return new Date(iso).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}); }
+function weekIndex(){ return Math.floor((Date.now()/864e5 + 4) / 7); }
+const med = a => { if(!a.length) return null; const s=[...a].sort((x,y)=>x-y), n=s.length;
+  return n%2 ? s[(n-1)/2] : Math.round((s[n/2-1]+s[n/2])/2); };
+const mean = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : null;
+const r1 = v => v==null ? "—" : (Math.round(v*10)/10).toString().replace(".",",");
+
+// ---------- scène ----------
+let stageCleanup = null;
+function openStage(label){
+  document.getElementById("stage-label").textContent = label;
+  document.getElementById("stage-timer").textContent = "";
+  document.getElementById("stage").classList.add("on");
+}
+function closeStage(){
+  document.getElementById("stage").classList.remove("on");
+  document.getElementById("stage-mid").innerHTML = "";
+  document.getElementById("stage-quit").classList.remove("hidden");
+}
+function quitStage(){ if(stageCleanup){ stageCleanup(); stageCleanup=null; } closeStage(); }
+function mid(html){ document.getElementById("stage-mid").innerHTML = html; }
+function setTimerText(t){ document.getElementById("stage-timer").textContent = t; }
+function mmss(ms){ const s=Math.max(0,Math.ceil(ms/1000)); return Math.floor(s/60)+":"+String(s%60).padStart(2,"0"); }
+function resultScreen(title, lines, onDone){
+  document.getElementById("stage-quit").classList.add("hidden");
+  setTimerText("");
+  mid('<div class="stage-title">'+title+'</div><div class="res">'+lines.join("<br>")+'</div>'+
+      '<button class="btn btn-teal" style="max-width:300px" id="okbtn">Enregistrer</button>');
+  document.getElementById("okbtn").onclick = () => { onDone(); closeStage(); };
+}
+
+// ---------- 1. PVT-B ----------
+// 3 min, intervalle 1–4 s, lapse > 355 ms, faux départ si < 100 ms ou avant stimulus.
+function startPVT(){
+  openStage("PVT-B");
+  mid('<div class="stage-title">Attention soutenue — 3 min</div>'+
+      '<div class="stage-body">Un compteur se déclenche à intervalles irréguliers. Tape l\'écran dès qu\'il apparaît, le plus vite possible — mais pas avant, sinon c\'est un faux départ. Téléphone en main, sans distraction.</div>'+
+      '<button class="btn btn-teal" style="max-width:300px" id="go">Commencer</button>');
+  document.getElementById("go").onclick = runPVT;
+}
+function runPVT(){
+  const DUR = 180000, LAPSE = 355;
+  const rts = []; let falseStarts = 0;
+  let onset = null, isiTimer = null, raf = null, done = false;
+  const end = performance.now() + DUR;
+
+  mid('<div class="stim" id="stim"><span class="counter mono" id="cnt"></span></div><div class="flash" id="flash"></div>');
+  const stim = document.getElementById("stim"), cnt = document.getElementById("cnt"), flash = document.getElementById("flash");
+
+  const tick = () => { setTimerText(mmss(end - performance.now())); };
+  const tickTimer = setInterval(tick, 250); tick();
+
+  function cleanup(){
+    done = true;
+    clearTimeout(isiTimer); clearInterval(tickTimer); cancelAnimationFrame(raf);
+    document.getElementById("stage").removeEventListener("pointerdown", onTap);
+  }
+  stageCleanup = cleanup;
+
+  function schedule(){
+    onset = null; cnt.textContent = ""; stim.classList.remove("on");
+    if(performance.now() >= end){ finish(); return; }
+    isiTimer = setTimeout(() => {
+      onset = performance.now(); stim.classList.add("on");
+      const loop = () => { if(onset===null) return; cnt.textContent = Math.round(performance.now()-onset); raf = requestAnimationFrame(loop); };
+      loop();
+    }, 1000 + Math.random()*3000);
+  }
+
+  function onTap(){
+    if(done) return;
+    if(onset === null){
+      falseStarts++; clearTimeout(isiTimer);
+      flash.textContent = "trop tôt"; setTimeout(()=>{ if(!done) flash.textContent=""; }, 700);
+      schedule(); return;
+    }
+    const rt = performance.now() - onset;
+    cancelAnimationFrame(raf); onset = null; stim.classList.remove("on");
+    if(rt < 100){ falseStarts++; flash.textContent = "trop tôt"; }
+    else { rts.push(rt); cnt.textContent = Math.round(rt); flash.textContent = ""; }
+    setTimeout(()=>{ if(!done) { flash.textContent=""; schedule(); } }, 900);
+  }
+  document.getElementById("stage").addEventListener("pointerdown", onTap);
+
+  function finish(){
+    cleanup();
+    const lapses = rts.filter(r => r > LAPSE).length;
+    const speed = rts.length ? mean(rts.map(r => 1000/r)) : null;   // 1/RT, métrique robuste
+    const m = { n:rts.length, median:med(rts), mean:mean(rts)?Math.round(mean(rts)):null,
+                lapses, falseStarts, speed:speed?Math.round(speed*100)/100:null };
+    resultScreen("PVT-B terminé", [
+      "Médiane : <b>"+(m.median??"—")+" ms</b>",
+      "Lapses (> 355 ms) : <b>"+m.lapses+"</b> sur "+m.n,
+      "Faux départs : <b>"+m.falseStarts+"</b>",
+      "Vitesse moyenne (1/RT) : <b>"+r1(m.speed)+"</b>"
+    ], () => addRun("pvt", m));
+  }
+  schedule();
+}
+
+// ---------- 2. Substitution symboles-chiffres ----------
+const SYM = ["■","▲","▼","●","◆","★","✚","✕","≡"];
+function startSDMT(){
+  openStage("Substitution");
+  let key = '<div class="keyrow">';
+  SYM.forEach((s,i)=>{ key += '<div class="keypair"><span class="s">'+s+'</span><span class="d">'+(i+1)+'</span></div>'; });
+  key += '</div>';
+  mid('<div class="stage-title">Vitesse de traitement — 90 s</div>'+key+
+      '<div class="stage-body">Chaque symbole correspond à un chiffre. Un symbole s\'affiche, tape le chiffre correspondant, le plus vite possible. La grille de correspondance reste affichée pendant tout le test.</div>'+
+      '<button class="btn btn-teal" style="max-width:300px" id="go">Commencer</button>');
+  document.getElementById("go").onclick = runSDMT;
+}
+function runSDMT(){
+  const DUR = 90000;
+  let correct = 0, errors = 0, cur = -1, done = false;
+  const end = performance.now() + DUR;
+
+  let key = '<div class="keyrow">';
+  SYM.forEach((s,i)=>{ key += '<div class="keypair"><span class="s">'+s+'</span><span class="d">'+(i+1)+'</span></div>'; });
+  key += '</div>';
+  let pad = '<div class="pad">';
+  for(let i=1;i<=9;i++) pad += '<button data-d="'+i+'">'+i+'</button>';
+  pad += '</div>';
+  mid(key+'<div class="glyph mono" id="glyph"></div><div class="flash" id="flash"></div>'+pad);
+
+  const glyph = document.getElementById("glyph"), flash = document.getElementById("flash");
+  const tickTimer = setInterval(()=>setTimerText(mmss(end - performance.now())), 250);
+  setTimerText(mmss(DUR));
+
+  function next(){
+    let i; do { i = Math.floor(Math.random()*SYM.length); } while(i === cur);
+    cur = i; glyph.textContent = SYM[i];
+  }
+  function press(d){
+    if(done) return;
+    if(performance.now() >= end){ finish(); return; }
+    if(d === cur+1){ correct++; flash.textContent = ""; }
+    else { errors++; flash.textContent = "erreur"; setTimeout(()=>{ if(!done) flash.textContent=""; }, 400); }
+    next();
+    if(performance.now() >= end) finish();
+  }
+  document.querySelectorAll(".pad button").forEach(b=>{
+    b.onclick = () => press(Number(b.dataset.d));
+  });
+  function cleanup(){ done = true; clearInterval(tickTimer); }
+  stageCleanup = cleanup;
+  function finish(){
+    cleanup();
+    const m = { correct, errors, total:correct+errors };
+    resultScreen("Substitution terminée", [
+      "Corrects : <b>"+correct+"</b>",
+      "Erreurs : <b>"+errors+"</b>",
+      "Total : <b>"+m.total+"</b> réponses en 90 s"
+    ], () => addRun("sdmt", m));
+  }
+  next();
+  setTimeout(()=>{ if(!done) finish(); }, DUR + 200);
+}
+
+// ---------- 3. Fluence verbale ----------
+const CATS = ["animaux","fruits et légumes","métiers","vêtements","objets de la cuisine","moyens de transport"];
+const LETS = ["P","R","V","L","M","T"];
+function fluSets(){ const w = weekIndex(); return { cat: CATS[w % CATS.length], let: LETS[(w+2) % LETS.length] }; }
+
+function startFlu(){
+  const s = fluSets();
+  openStage("Fluence");
+  mid('<div class="stage-title">Fluence verbale — 2 × 60 s</div>'+
+      '<div class="stage-body">Deux manches de 60 s. Tu énonces les mots <b>à voix haute</b> et tu tapes le gros bouton à chaque mot. Pas de noms propres, pas de variantes du même mot (chat, chatte, chaton = 1).<br><br>Manche 1 : catégorie <b>'+s.cat+'</b>.<br>Manche 2 : mots commençant par <b>'+s.let+'</b>.</div>'+
+      '<button class="btn btn-teal" style="max-width:300px" id="go">Commencer la manche 1</button>');
+  document.getElementById("go").onclick = () => runFlu(1, {});
+}
+function runFlu(round, acc){
+  const s = fluSets();
+  const DUR = 60000;
+  let count = 0, done = false;
+  const end = performance.now() + DUR;
+  const prompt = round === 1 ? "Catégorie : " + s.cat : "Mots commençant par " + s.let;
+
+  mid('<div class="stage-body" style="margin-bottom:2px">'+prompt+'</div>'+
+      '<div class="bigcount mono" id="c">0</div>'+
+      '<button class="tapbig" id="tap">+ 1 mot</button>'+
+      '<button class="btn btn-ghost" style="max-width:160px" id="undo">Annuler le dernier</button>');
+  const c = document.getElementById("c");
+  document.getElementById("tap").onclick = () => { if(!done){ count++; c.textContent = count; } };
+  document.getElementById("undo").onclick = () => { if(!done && count>0){ count--; c.textContent = count; } };
+
+  const tickTimer = setInterval(()=>setTimerText(mmss(end - performance.now())), 250);
+  setTimerText(mmss(DUR));
+  function cleanup(){ done = true; clearInterval(tickTimer); }
+  stageCleanup = cleanup;
+
+  setTimeout(() => {
+    if(done) return;
+    cleanup();
+    if(round === 1){
+      document.getElementById("stage-quit").classList.add("hidden");
+      setTimerText("");
+      mid('<div class="stage-title">Manche 1 terminée</div>'+
+          '<div class="res"><b>'+count+'</b> mots — '+s.cat+'</div>'+
+          '<div class="stage-body">Manche 2 : mots commençant par <b>'+s.let+'</b>.</div>'+
+          '<button class="btn btn-teal" style="max-width:300px" id="go2">Commencer la manche 2</button>');
+      document.getElementById("go2").onclick = () => {
+        document.getElementById("stage-quit").classList.remove("hidden");
+        runFlu(2, { sem: count, cat: s.cat });
+      };
+    } else {
+      const m = { sem: acc.sem, cat: acc.cat, pho: count, letter: s.let };
+      resultScreen("Fluence terminée", [
+        "Catégorielle ("+m.cat+") : <b>"+m.sem+"</b> mots",
+        "Phonémique (lettre "+m.letter+") : <b>"+m.pho+"</b> mots"
+      ], () => addRun("flu", m));
+    }
+  }, DUR);
+}
+
+// ---------- 4. PHQ-8 ----------
+// 8 items, 0–3 chacun, total 0–24. C'est le PHQ-9 privé de son 9e item, qui est une
+// question de risque clinique : elle n'a pas sa place dans un outil sans clinicien derrière.
+// La fenêtre de référence est de 2 semaines, d'où l'espacement mensuel recommandé.
+const PHQ = [
+  "Peu d'intérêt ou de plaisir à faire les choses",
+  "Te sentir triste, déprimé ou désespéré",
+  "Difficultés à t'endormir ou à rester endormi, ou au contraire dormir trop",
+  "Te sentir fatigué ou avoir peu d'énergie",
+  "Peu d'appétit ou manger trop",
+  "Avoir une mauvaise opinion de toi-même, ou le sentiment d'être un raté, ou d'avoir déçu tes proches",
+  "Difficultés à te concentrer, par exemple pour lire ou suivre quelque chose",
+  "Parler ou bouger si lentement que les autres l'ont remarqué — ou au contraire être agité au point de bouger beaucoup plus que d'habitude"
+];
+const PHQ_OPTS = [["Jamais",0],["Plusieurs jours",1],["Plus de la moitié du temps",2],["Presque tous les jours",3]];
+function phqBand(sc){
+  if(sc <= 4) return "minimal";
+  if(sc <= 9) return "léger";
+  if(sc <= 14) return "modéré";
+  if(sc <= 19) return "modérément sévère";
+  return "sévère";
+}
+function daysSincePHQ(){
+  const r = T.runs.filter(x => x.test === "phq").pop();
+  return r ? Math.round((Date.now() - new Date(r.ts).getTime()) / 864e5) : null;
+}
+
+function startPHQ(){
+  openStage("PHQ-8");
+  const ds = daysSincePHQ();
+  const overlap = ds !== null && ds < 14
+    ? '<div class="warn">Dernière passation il y a '+ds+' jours. Les items portent sur deux semaines : deux mesures rapprochées se recouvrent et ne sont pas indépendantes.</div>'
+    : '';
+  mid('<div class="stage-title">Humeur — 8 items</div>'+
+      '<div class="stage-body">Sur les <b>deux dernières semaines</b>, à quelle fréquence as-tu été gêné par chacun de ces problèmes ? Réponds au plus juste, sans réfléchir longtemps.</div>'+
+      overlap+
+      '<button class="btn btn-teal" style="max-width:300px" id="go">Commencer</button>');
+  document.getElementById("go").onclick = () => runPHQ(0, []);
+}
+function runPHQ(i, answers){
+  if(i >= PHQ.length){
+    const score = answers.reduce((a,b)=>a+b,0);
+    const band = phqBand(score);
+    const lines = [
+      "Score : <b>"+score+" / 24</b>",
+      "Sévérité : <b>"+band+"</b>",
+      "<span style=\"color:var(--dim)\">Seuils : 5 léger · 10 modéré · 15 modérément sévère · 20 sévère</span>"
+    ];
+    if(score >= 15) lines.push('<span style="color:var(--amber)">Un score dans cette zone, ou qui monte sur deux passations de suite, n\'est plus une question de protocole : c\'est un chiffre à montrer à un médecin.</span>');
+    resultScreen("PHQ-8 terminé", lines, () => addRun("phq", { score, band, items:answers }));
+    return;
+  }
+  setTimerText((i+1)+" / "+PHQ.length);
+  let opts = '<div class="qopts">';
+  PHQ_OPTS.forEach(o => { opts += '<button data-v="'+o[1]+'">'+o[0]+'</button>'; });
+  opts += '</div>';
+  mid('<div class="qtext">'+PHQ[i]+'</div>'+opts+
+      (i>0 ? '<button class="btn btn-ghost" style="max-width:160px" id="back">Question précédente</button>' : ''));
+  document.querySelectorAll(".qopts button").forEach(b=>{
+    b.onclick = () => runPHQ(i+1, answers.concat([Number(b.dataset.v)]));
+  });
+  const back = document.getElementById("back");
+  if(back) back.onclick = () => runPHQ(i-1, answers.slice(0,-1));
+  stageCleanup = null;
+}
+
+// ---------- accueil / historique ----------
+function fmtRun(r){
+  const m = r.metrics;
+  if(r.test === "pvt") return "PVT " + (m.median??"—") + " ms · " + m.lapses + " lapses";
+  if(r.test === "sdmt") return "Substitution " + m.correct + " corrects · " + m.errors + " err.";
+  if(r.test === "phq") return "PHQ-8 " + m.score + "/24 · " + m.band;
+  return "Fluence " + m.sem + " / " + m.pho;
+}
+function lastOf(test){
+  const r = [...T.runs].filter(x => x.test === test).pop();
+  if(!r) return "Jamais lancé";
+  return "Dernier : " + frShort(r.day) + " " + hhmm(r.ts) + " — " + fmtRun(r);
+}
+
+// ---------- courbes ----------
+// Une courbe par test. Échelle y automatique sur l'étendue des données :
+// on lit une tendance, pas une valeur absolue.
+const CHARTS = {
+  pvt:  { title:"Médiane, ms — plus bas = mieux",
+          series:[{ get:r=>r.metrics.median, color:"var(--teal)", name:"" }] },
+  sdmt: { title:"Réponses correctes en 90 s",
+          series:[{ get:r=>r.metrics.correct, color:"var(--blue)", name:"" }] },
+  flu:  { title:"Mots — catégorielle / phonémique",
+          series:[{ get:r=>r.metrics.sem, color:"var(--teal)", name:"cat." },
+                  { get:r=>r.metrics.pho, color:"var(--amber)", name:"lettre" }] },
+  phq:  { title:"Score /24 — plus bas = mieux",
+          series:[{ get:r=>r.metrics.score, color:"var(--blue)", name:"" }] }
+};
+const TESTS = ["pvt","sdmt","flu","phq"];
+
+function chartHtml(test){
+  const cfg = CHARTS[test];
+  const runs = T.runs.filter(r => r.test === test);
+  if(runs.length === 0) return '<div class="nodata">Courbe à partir du 2ᵉ run.</div>';
+  if(runs.length === 1) return '<div class="nodata">1 run enregistré — la courbe démarre au prochain.</div>';
+
+  const cols = cfg.series.map(s => runs.map(r => { const v = s.get(r); return (typeof v === "number" && isFinite(v)) ? v : null; }));
+  const all = cols.flat().filter(v => v !== null);
+  if(!all.length) return '<div class="nodata">Pas de valeur exploitable.</div>';
+
+  let lo = Math.min(...all), hi = Math.max(...all);
+  if(hi === lo){ lo -= 1; hi += 1; }
+  const m = (hi - lo) * 0.18; lo -= m; hi += m;
+
+  const w = 280, h = 52, p = 5, n = runs.length;
+  const x = i => p + (i / (n - 1)) * (w - 2 * p);
+  const y = v => h - p - ((v - lo) / (hi - lo)) * (h - 2 * p);
+
+  let paths = "", dots = "";
+  cols.forEach((vals, si) => {
+    const c = cfg.series[si].color;
+    let d = "", gap = true;
+    vals.forEach((v, i) => {
+      if(v === null){ gap = true; return; }
+      d += (gap ? "M" : "L") + x(i).toFixed(1) + " " + y(v).toFixed(1) + " ";
+      dots += '<circle cx="'+x(i).toFixed(1)+'" cy="'+y(v).toFixed(1)+'" r="2.3" fill="'+c+'"/>';
+      gap = false;
+    });
+    if(d) paths += '<path d="'+d+'" fill="none" stroke="'+c+'" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>';
+  });
+
+  const legend = cfg.series.filter(s => s.name).map(s =>
+    '<span style="color:'+s.color+'">'+s.name+'</span>').join(" / ");
+
+  return '<div class="chart-hd"><span>'+cfg.title+'</span><span class="mono">'+legend+'</span></div>'+
+    '<svg viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'+paths+dots+'</svg>'+
+    '<div class="chart-ft"><span>'+frShort(runs[0].day)+'</span>'+
+    '<span class="mono">'+Math.round(Math.min(...all))+'–'+Math.round(Math.max(...all))+'</span>'+
+    '<span>'+frShort(runs[n-1].day)+'</span></div>';
+}
+
+function renderHome(){
+  TESTS.forEach(t => {
+    document.getElementById("last-"+t).textContent = lastOf(t);
+    document.getElementById("ch-"+t).innerHTML = chartHtml(t);
+  });
+  const h = document.getElementById("hist");
+  if(!T.runs.length){ h.innerHTML = '<span class="d">Aucun run enregistré.</span>'; return; }
+  h.innerHTML = [...T.runs].reverse().slice(0,12).map(r =>
+    '<span class="d">'+frShort(r.day)+" "+hhmm(r.ts)+'</span> — '+fmtRun(r)
+  ).join("<br>");
+}
+
+function summaryText(){
+  const lines = ["TESTS — " + frShort(today())];
+  TESTS.forEach(t => {
+    const runs = T.runs.filter(r => r.test === t);
+    if(!runs.length) return;
+    const last = runs[runs.length-1];
+    lines.push(fmtRun(last) + " · " + frShort(last.day) + " " + hhmm(last.ts) + " · run n°" + runs.length);
+  });
+  return lines.join("\n");
+}
+function copyResults(){
+  const txt = summaryText();
+  const done = () => { const b = document.getElementById("cpb"); b.textContent = "Copié"; setTimeout(()=>b.textContent="Copier les résultats", 1800); };
+  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(()=>{fb(txt);done();}); }
+  else { fb(txt); done(); }
+}
+function fb(t){ const ta=document.createElement("textarea"); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); }
+function exportJSON(){
+  const blob = new Blob([JSON.stringify(T,null,1)],{type:"application/json"});
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = "tests-backup-"+today()+".json"; a.click(); URL.revokeObjectURL(a.href);
+}
+function importJSON(input){
+  const f = input.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = () => { try{ const d = JSON.parse(rd.result);
+      if(d && Array.isArray(d.runs)){ T = d; save(); renderHome(); } else alert("Fichier invalide.");
+    }catch(e){ alert("Fichier invalide."); } };
+  rd.readAsText(f); input.value = "";
+}
+
+renderHome();
+</script>
+</body>
+</html>

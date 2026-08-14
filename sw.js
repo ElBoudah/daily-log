@@ -1,5 +1,7 @@
-const CACHE = "suivi-v1";
-const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
+// Le nom du cache doit changer à chaque mise à jour des fichiers,
+// sinon la stratégie cache-first continue de servir l'ancienne version.
+const CACHE = "suivi-v3";
+const FILES = ["./", "./index.html", "./tests.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
 });
