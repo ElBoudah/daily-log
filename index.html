@@ -34,17 +34,10 @@
   .tabs button.on{background:var(--card2); color:var(--txt); border-color:var(--line2);}
   .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:10px;}
   .label{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); margin:14px 0 8px;}
-  .check{width:100%; display:flex; justify-content:space-between; align-items:center; text-align:left;
-    background:var(--card); border:1px solid var(--line); border-radius:12px; padding:13px 16px;
-    color:var(--txt); font-size:14px; margin-bottom:8px; cursor:pointer;}
-  .check.on{background:rgba(127,183,163,.12); border-color:var(--teal);}
-  .check .box{width:24px; height:24px; min-width:24px; margin-left:12px; border-radius:50%;
-    border:1.5px solid var(--faint); display:flex; align-items:center; justify-content:center;
-    font-size:14px; font-weight:700; color:var(--bg);}
-  .check.on .box{background:var(--teal); border-color:var(--teal);}
   .srow{display:flex; justify-content:space-between; margin-bottom:8px; font-size:14px;}
+  .sep{height:1px; background:var(--line); margin:14px -16px 12px;}
 
-  /* curseurs : la zone tactile doit rester large, et le glissement ne doit jamais être interrompu */
+  /* Curseurs : zone tactile large, et surtout aucun re-rendu pendant le glissement. */
   .slidewrap{padding:6px 0 2px; touch-action:pan-y;}
   input[type=range]{width:100%; height:4px; background:var(--line); border-radius:2px;
     -webkit-appearance:none; appearance:none; margin:0;}
@@ -53,9 +46,7 @@
   input[type=range]::-moz-range-thumb{width:26px; height:26px; border-radius:50%; cursor:pointer; border:none;}
   .r-teal::-webkit-slider-thumb{background:var(--teal);} .r-teal::-moz-range-thumb{background:var(--teal);}
   .r-blue::-webkit-slider-thumb{background:var(--blue);} .r-blue::-moz-range-thumb{background:var(--blue);}
-  .r-amber::-webkit-slider-thumb{background:var(--amber);} .r-amber::-moz-range-thumb{background:var(--amber);}
 
-  /* heures de sommeil */
   .timerow{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .tf{display:flex; flex-direction:column; gap:5px;}
   .tl{font-size:11.5px; color:var(--dim);}
@@ -69,8 +60,6 @@
     border-radius:9px; padding:5px 14px; font-size:15px; cursor:pointer;}
   .daynav button:disabled{color:#374151;}
   .daynav span{font-size:14px; text-transform:capitalize;}
-  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
-  .big{font-size:22px; margin:2px 0;}
   .tiny{font-size:11px; color:var(--dim);}
   .btn{width:100%; border-radius:12px; padding:13px; font-size:14px; font-weight:500; border:none; cursor:pointer;}
   .btn-teal{background:var(--teal); color:var(--bg);}
@@ -84,6 +73,9 @@
   .chips.pick button{flex:1; padding:11px 0; text-align:center;}
   .chips.pick button.on{background:rgba(127,183,163,.15); border-color:var(--teal); color:var(--teal);}
   .chips.pick{flex-wrap:nowrap; gap:6px; margin:10px 0 0;}
+  .chips.win{flex-wrap:nowrap; gap:6px; margin:0 0 12px;}
+  .chips.win button{flex:1; padding:8px 0; text-align:center;}
+  .chips.win button.on{background:var(--card2); border-color:var(--line2); color:var(--txt);}
   .msg{background:rgba(127,183,163,.10); border:1px solid var(--teal); color:#cfe8de;
     border-radius:12px; padding:13px 16px; font-size:14px; margin-bottom:12px;}
   ol{margin:6px 0 0; padding-left:2px; list-style:none; color:var(--mut); font-size:13.5px;}
@@ -92,6 +84,10 @@
   .spark{width:100%; height:56px; display:block;}
   .rowbtns{display:flex; gap:10px;}
   .link{display:block; text-align:center; font-size:13px; color:var(--dim); text-decoration:none; padding:12px 0 0;}
+  /* Bloc de stats compact : trois lignes, pas huit cartes. */
+  .st{display:flex; justify-content:space-between; align-items:baseline; gap:10px; font-size:13px; padding:5px 0;}
+  .st .k{color:var(--dim); white-space:nowrap;}
+  .st .v{text-align:right;}
   input[type=file]{display:none;}
   .hidden{display:none;}
 </style>
@@ -99,7 +95,7 @@
 <body>
 <div class="wrap">
   <div class="hdr"><h1>Suivi</h1><span id="saved" class="mono">enregistré</span></div>
-  <p class="sub">30 secondes par jour. Les données décident, pas l'humeur du moment.</p>
+  <p class="sub">Une minute par jour. Les données décident, pas l'humeur du moment.</p>
 
   <button class="urgent" onclick="go('pulsion')">Envie forte maintenant → protocole 10 min</button>
 
@@ -116,17 +112,18 @@
 <script>
 // ---------- État ----------
 const KEY = "suivi_v1";
+const TESTS_KEY = "suivi_tests_v1";
 let S = load();
 let tab = "jour";
 let selDay = today();
 let urgeType = null, urgeTrig = null;
+let win = 14;                 // fenêtre des courbes
 let saveTimer = null;
 
-const EMPTY = { bed:null, wake:null, cardioMin:null, focusMin:null, clarity:null, mood:null, urge:null };
-// "cardio" et "focus" sont les anciens champs booléens : encore lus pour détecter
+const EMPTY = { bed:null, wake:null, sleepQ:null, cardioMin:null, focusMin:null, clarity:null, mood:null };
+// "cardio", "focus", "sleep" et "urge" sont d'anciens champs : encore lus pour détecter
 // un jour rempli, plus jamais écrits.
-const FIELDS = ["bed","wake","cardioMin","focusMin","clarity","mood","urge","cardio","focus","sleep"];
-// Seuils de référence, utilisés pour compter des séances — jamais pour juger une journée.
+const FIELDS = ["bed","wake","sleepQ","cardioMin","focusMin","clarity","mood","cardio","focus","sleep","urge"];
 const CARDIO_MIN = 30, FOCUS_MIN = 10;
 
 function load(){
@@ -138,7 +135,7 @@ function save(){
     localStorage.setItem(KEY, JSON.stringify(S));
     const el = document.getElementById("saved");
     el.classList.add("on"); setTimeout(()=>el.classList.remove("on"), 1400);
-  }catch(e){ alert("Échec de sauvegarde — exporte tes données en JSON par sécurité."); }
+  }catch(e){ alert("Échec de sauvegarde — exporte tes données par sécurité."); }
 }
 function saveSoon(){ clearTimeout(saveTimer); saveTimer = setTimeout(save, 350); }
 
@@ -154,44 +151,63 @@ function diff(k1,k2){ const [a,b,c]=k1.split("-").map(Number), [x,y,z]=k2.split(
 // ---------- Sommeil ----------
 function toMin(t){ if(!t) return null; const [h,m]=t.split(":").map(Number);
   if(!isFinite(h)||!isFinite(m)) return null; return h*60+m; }
-// Durée : (lever - coucher) modulo 24 h, ce qui gère le passage de minuit sans cas particulier.
+// Durée = (lever - coucher) modulo 24 h : gère le passage de minuit sans cas particulier.
 function durMin(d){ const b=toMin(d.bed), w=toMin(d.wake); if(b===null||w===null) return null; return (w-b+1440)%1440; }
-// Pour l'écart-type du coucher : on recentre l'échelle sur 18 h, sinon 23 h 50 et 00 h 10
-// seraient à 23 h d'écart au lieu de 20 min.
+// Écart-type du coucher : échelle recentrée sur 18 h, sinon 23 h 50 et 00 h 10
+// apparaîtraient à 23 h d'écart au lieu de 20 min.
 function bedShift(t){ const b=toMin(t); return b===null ? null : (b-1080+1440)%1440; }
-function hm(mins){ if(mins===null) return "—"; return Math.floor(mins/60)+" h "+String(mins%60).padStart(2,"0"); }
-function sd(a){ if(a.length<2) return null; const m=a.reduce((x,y)=>x+y,0)/a.length;
+function hm(mins){ if(mins===null||mins===undefined) return "—"; return Math.floor(mins/60)+" h "+String(Math.round(mins)%60).padStart(2,"0"); }
+
+// ---------- Dispersion ----------
+const mean = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : null;
+function sd(a){ if(a.length<2) return null; const m=mean(a);
   return Math.sqrt(a.reduce((s,v)=>s+(v-m)*(v-m),0)/(a.length-1)); }
+// Variation jour à jour : moyenne des écarts absolus entre deux jours CONSÉCUTIFS.
+// C'est la mesure d'instabilité ; l'écart-type, lui, ne mesure que la dispersion.
+// Une semaine 9-2-8-1 et une semaine 1-2-8-9 ont le même écart-type, pas la même variation.
+function masd(serie){
+  let s=0, n=0;
+  for(let i=1;i<serie.length;i++){
+    if(serie[i]!==null && serie[i-1]!==null){ s+=Math.abs(serie[i]-serie[i-1]); n++; }
+  }
+  return n ? s/n : null;
+}
+const fmt = v => v==null ? "—" : (Math.round(v*10)/10).toString().replace(".",",");
+const pm = (m,d,unit) => m==null ? "—" : fmt(m)+(d==null?"":" ± "+fmt(d))+(unit||"");
 
 // ---------- Stats ----------
-function stats(win){
+function stats(w){
   const t = today(), keys = [];
-  for(let i=win-1;i>=0;i--) keys.push(addD(t,-i));
+  for(let i=w-1;i>=0;i--) keys.push(addD(t,-i));
   let logged=0, nights=0, cardioSess=0, focusSess=0, cardioVol=0, focusVol=0;
-  const cl=[], mo=[], ur=[], durs=[], beds=[];
+  const ser = {clarity:[], mood:[], sleepQ:[], dur:[]};
+  const beds=[];
   keys.forEach(k=>{
-    const d=S.days[k]; if(!d) return;
+    const d=S.days[k];
+    if(!d){ ser.clarity.push(null); ser.mood.push(null); ser.sleepQ.push(null); ser.dur.push(null); return; }
     const touched=FIELDS.some(f=>d[f]!==null&&d[f]!==undefined);
-    if(!touched) return;
-    logged++;
+    if(touched) logged++;
     if(typeof d.cardioMin==="number"){ cardioVol+=d.cardioMin; if(d.cardioMin>=CARDIO_MIN) cardioSess++; }
     if(typeof d.focusMin==="number"){ focusVol+=d.focusMin; if(d.focusMin>=FOCUS_MIN) focusSess++; }
-    const du=durMin(d); if(du!==null){ nights++; durs.push(du); }
+    const du=durMin(d); if(du!==null) nights++;
     const bs=bedShift(d.bed); if(bs!==null) beds.push(bs);
-    if(d.clarity!=null)cl.push(d.clarity); if(d.mood!=null)mo.push(d.mood); if(d.urge!=null)ur.push(d.urge);
+    ser.clarity.push(d.clarity!=null?d.clarity:null);
+    ser.mood.push(d.mood!=null?d.mood:null);
+    ser.sleepQ.push(d.sleepQ!=null?d.sleepQ:null);
+    ser.dur.push(du);
   });
-  const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+  const val = a => a.filter(v=>v!==null);
+  const pack = a => ({m:mean(val(a)), sd:sd(val(a)), v:masd(a), n:val(a).length});
   const rel=S.events.filter(e=>e.type==="rechute").map(e=>e.day).sort();
   let cur=null, avg=null;
   if(rel.length){
     cur=diff(rel[rel.length-1],t);
     if(rel.length>=2){ const g=[]; for(let i=1;i<rel.length;i++) g.push(diff(rel[i-1],rel[i])); avg=mean(g); }
   }
-  return {keys,logged,nights,cardioSess,focusSess,cardioVol,focusVol,
-    durAvg:mean(durs), bedSD:sd(beds),
-    clA:mean(cl),moA:mean(mo),urA:mean(ur),cur,avg};
+  return {keys, logged, nights, cardioSess, focusSess, cardioVol, focusVol,
+    bedSD:sd(beds), dur:pack(ser.dur), sq:pack(ser.sleepQ),
+    cl:pack(ser.clarity), mo:pack(ser.mood), ser, cur, avg};
 }
-const fmt = v => v==null ? "—" : (Math.round(v*10)/10).toString().replace(".",",");
 
 function bilan(){
   const s=stats(7), t=today();
@@ -201,11 +217,13 @@ function bilan(){
   return [
     "SUIVI "+frShort(addD(t,-6))+" → "+frShort(t),
     "Jours loggés : "+s.logged+"/7",
-    "Cardio : "+s.cardioSess+" séance(s) ≥30 min · "+s.cardioVol+" min au total",
-    "Lecture/médit. : "+s.focusSess+" séance(s) ≥10 min · "+s.focusVol+" min au total",
-    "Sommeil : "+s.nights+" nuits · durée moy. "+hm(s.durAvg===null?null:Math.round(s.durAvg))+
-      " · régularité du coucher "+(s.bedSD===null?"—":"±"+Math.round(s.bedSD)+" min"),
-    "Clarté moy. "+fmt(s.clA)+"/10 · Humeur moy. "+fmt(s.moA)+"/10 · Pulsion moy. "+fmt(s.urA)+"/10",
+    "Sommeil : "+s.nights+" nuits · durée "+(s.dur.m==null?"—":hm(s.dur.m)+(s.dur.sd==null?"":" ± "+Math.round(s.dur.sd)+" min"))+
+      " · régularité du coucher "+(s.bedSD==null?"—":"± "+Math.round(s.bedSD)+" min")+
+      " · qualité "+pm(s.sq.m,s.sq.sd,"/10"),
+    "Cardio : "+s.cardioSess+" séance(s) ≥"+CARDIO_MIN+" min · "+s.cardioVol+" min au total",
+    "Lecture/médit. : "+s.focusSess+" séance(s) ≥"+FOCUS_MIN+" min · "+s.focusVol+" min au total",
+    "Clarté : "+pm(s.cl.m,s.cl.sd,"/10")+" · variation j/j "+fmt(s.cl.v),
+    "Humeur : "+pm(s.mo.m,s.mo.sd,"/10")+" · variation j/j "+fmt(s.mo.v),
     "Événements 7 j : "+rs.length+" envie(s) passée(s)"+tg(rs)+" · "+re.length+" rechute(s)"+tg(re),
     "Intervalle courant : "+(s.cur==null?"—":s.cur+" j")+(s.avg!=null?" · moyenne : "+fmt(s.avg)+" j":"")
   ].join("\n");
@@ -213,15 +231,15 @@ function bilan(){
 
 // ---------- Sparkline ----------
 function spark(field,color){
-  const s=stats(14), w=280, h=56, p=6;
-  const x=i=>p+i/(s.keys.length-1)*(w-2*p), y=v=>h-p-(v/10)*(h-2*p);
+  const s=stats(win), w=280, h=56, p=6, n=s.keys.length;
+  const x=i=>p+i/(n-1)*(w-2*p), y=v=>h-p-(v/10)*(h-2*p);
   let path="", prevNull=true, dots="", any=false;
-  s.keys.forEach((k,i)=>{
-    const d=S.days[k]; const v=d&&d[field]!=null?d[field]:null;
+  const serie = s.ser[field];
+  serie.forEach((v,i)=>{
     if(v===null){prevNull=true;return;}
     any=true;
     path+=(prevNull?"M":"L")+x(i).toFixed(1)+" "+y(v).toFixed(1)+" ";
-    dots+='<circle cx="'+x(i).toFixed(1)+'" cy="'+y(v).toFixed(1)+'" r="2.4" fill="'+color+'"/>';
+    if(n<=30) dots+='<circle cx="'+x(i).toFixed(1)+'" cy="'+y(v).toFixed(1)+'" r="2.4" fill="'+color+'"/>';
     prevNull=false;
   });
   if(!any) return '<div style="height:56px;display:flex;align-items:center;font-size:12px;color:var(--dim)">pas encore de données</div>';
@@ -231,6 +249,7 @@ function spark(field,color){
 
 // ---------- Rendu ----------
 function go(t){ tab=t; urgeType=null; urgeTrig=null; render(); }
+function setWin(n){ win=n; render(); }
 function flash(txt){
   const m=document.getElementById("msg");
   m.textContent=txt; m.classList.remove("hidden");
@@ -248,15 +267,13 @@ function render(){
 
 function dayGet(){ return Object.assign({}, EMPTY, S.days[selDay]||{}); }
 
-// setField : redessine seulement quand c'est nécessaire.
-// Un re-rendu pendant un glissement détruirait l'élément en cours de manipulation
-// et couperait le geste — c'était le bug des curseurs.
+// Un re-rendu pendant un glissement détruirait l'élément manipulé et couperait
+// le geste : c'était le bug des curseurs. D'où le drapeau doRender.
 function setField(f, val, doRender){
   S.days[selDay] = Object.assign({}, EMPTY, S.days[selDay]||{});
   S.days[selDay][f] = val;
   if(doRender){ save(); render(); } else { saveSoon(); }
 }
-function toggle(f){ const d=dayGet(); setField(f, d[f]===true?false:true, true); } // conservé pour compat, plus utilisé
 function slide(f, el){
   const v = Number(el.value);
   setField(f, v, false);
@@ -270,8 +287,7 @@ function setTime(f, el){
 }
 function nav(n){ const nx=addD(selDay,n); if(nx<=today()) {selDay=nx; render();} }
 
-// Durées : la valeur est une quantité, pas un verdict. Un tap comme avant,
-// mais 20 min de cardio s'enregistrent comme 20 min et non comme un échec.
+// Durées : une quantité, pas un verdict. 20 min s'enregistrent comme 20 min.
 const PRESETS = { cardioMin:[0,15,30,45,60], focusMin:[0,5,10,20,30] };
 function setDur(f, v){ setField(f, v, true); }
 function askDur(f){
@@ -293,12 +309,15 @@ function durHtml(f, label){
     '<span class="mono" style="color:'+(v?"var(--teal)":"var(--dim)")+'">'+(v==null?"—":v+" min")+'</span></div>'+
     chips+'</div>';
 }
-function sliderHtml(f,label,cls,color){
+function sliderRow(f,label,cls,color){
   const d=dayGet(); const v=d[f];
-  return '<div class="card"><div class="srow"><span>'+label+'</span>'+
+  return '<div class="srow"><span>'+label+'</span>'+
     '<span class="mono" id="out-'+f+'" style="color:'+color+'">'+(v==null?"—":v)+'</span></div>'+
     '<div class="slidewrap"><input type="range" class="'+cls+'" min="0" max="10" step="1" '+
-    'value="'+(v==null?5:v)+'" oninput="slide(\''+f+'\', this)"></div></div>';
+    'value="'+(v==null?5:v)+'" oninput="slide(\''+f+'\', this)"></div>';
+}
+function sliderHtml(f,label,cls,color){
+  return '<div class="card">'+sliderRow(f,label,cls,color)+'</div>';
 }
 function sleepHtml(){
   const d=dayGet();
@@ -308,7 +327,9 @@ function sleepHtml(){
     '<div class="tf"><span class="tl">Lever (ce matin)</span>'+
     '<input type="time" value="'+(d.wake||"")+'" onchange="setTime(\'wake\', this)"></div>'+
     '</div><div class="srow" style="margin:12px 0 0"><span class="tiny">Durée</span>'+
-    '<span class="mono" id="out-dur">'+hm(durMin(d))+'</span></div></div>';
+    '<span class="mono" id="out-dur">'+hm(durMin(d))+'</span></div>'+
+    '<div class="sep"></div>'+
+    sliderRow("sleepQ","Qualité de la nuit","r-blue","var(--blue)")+'</div>';
 }
 
 function viewJour(){
@@ -321,8 +342,7 @@ function viewJour(){
     durHtml("focusMin","Lecture ou méditation")+
     '<div class="label">État du jour</div>'+
     sliderHtml("clarity","Clarté mentale","r-teal","var(--teal)")+
-    sliderHtml("mood","Humeur","r-blue","var(--blue)")+
-    sliderHtml("urge","Pression de l\u2019envie (moyenne du jour)","r-amber","var(--amber)");
+    sliderHtml("mood","Humeur","r-blue","var(--blue)");
 }
 
 const TRIGGERS=["Fatigue","Ennui","Seul le soir","Stress / conflit","Sans raison claire","Autre"];
@@ -344,7 +364,7 @@ function viewPulsion(){
     '<li>2. Une action physique tout de suite : sortir marcher, pompes, douche, atelier.</li>'+
     '<li>3. Après 10 min, tu logges le résultat ici. Dans les deux cas, c\u2019est une donnée.</li></ol></div>';
   if(urgeType===null){
-    h+='<div class="grid2">'+
+    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
       '<button class="btn btn-outline-teal" style="padding:16px 0" onclick="pickType(\'resistee\')">Envie passée</button>'+
       '<button class="btn btn-outline-grey" style="padding:16px 0" onclick="pickType(\'rechute\')">Rechute</button></div>';
   }else{
@@ -358,55 +378,74 @@ function viewPulsion(){
   return h;
 }
 
+// ---------- Export unique ----------
+function readTests(){
+  try{ const r=localStorage.getItem(TESTS_KEY); return r?JSON.parse(r):null; }catch(e){ return null; }
+}
+function exportAll(){
+  const bundle = { format:"suivi-export-1", exportedAt:new Date().toISOString(), suivi:S, tests:readTests() };
+  const blob=new Blob([JSON.stringify(bundle,null,1)],{type:"application/json"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+  a.download="suivi-"+today()+".json"; a.click(); URL.revokeObjectURL(a.href);
+}
+function importAll(input){
+  const f=input.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(d && d.suivi && d.suivi.days){                       // format groupé
+        S=d.suivi;
+        if(d.tests) localStorage.setItem(TESTS_KEY, JSON.stringify(d.tests));
+        save(); render(); flash("Données importées (suivi + tests).");
+      } else if(d && d.days && d.events){                      // ancien format
+        S=d; save(); render(); flash("Données importées (ancien format).");
+      } else flash("Fichier invalide.");
+    }catch(e){ flash("Fichier invalide."); }
+  };
+  r.readAsText(f); input.value="";
+}
 function copyBilan(){
   const txt=bilan();
-  const done=()=>{ const b=document.getElementById("cpb"); if(b){b.textContent="Copié — colle-le dans le chat Claude"; setTimeout(()=>{b.textContent="Copier le bilan hebdo";},2000);} };
+  const done=()=>{ const b=document.getElementById("cpb"); if(b){b.textContent="Copié — colle-le dans le chat"; setTimeout(()=>{b.textContent="Copier le bilan hebdo";},2000);} };
   if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(()=>{fallbackCopy(txt);done();}); }
   else{ fallbackCopy(txt); done(); }
 }
 function fallbackCopy(t){ const ta=document.createElement("textarea"); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); }
 
-function exportJSON(){
-  const blob=new Blob([JSON.stringify(S,null,1)],{type:"application/json"});
-  const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-  a.download="suivi-backup-"+today()+".json"; a.click(); URL.revokeObjectURL(a.href);
-}
-function importJSON(input){
-  const f=input.files[0]; if(!f) return;
-  const r=new FileReader();
-  r.onload=()=>{ try{ const d=JSON.parse(r.result);
-      if(d&&d.days&&d.events){ S=d; save(); render(); flash("Données importées."); }
-      else flash("Fichier invalide.");
-    }catch(e){ flash("Fichier invalide."); } };
-  r.readAsText(f); input.value="";
-}
-
+// ---------- Onglet Données : trois blocs ----------
 function viewDonnees(){
-  const s=stats(7), sp=stats(14);
-  return '<div class="grid2">'+
-    '<div class="card"><div class="tiny">Intervalle courant</div><div class="big mono">'+(s.cur==null?"—":s.cur+" j")+'</div>'+
-    '<div class="tiny">'+(s.avg!=null?"moyenne : "+fmt(s.avg)+" j":"depuis la dernière rechute")+'</div></div>'+
-    '<div class="card"><div class="tiny">7 derniers jours</div><div class="big mono">'+s.logged+'/7</div><div class="tiny">jours loggés</div></div></div>'+
-    '<div class="card"><div class="tiny">Sommeil 7 j — '+s.nights+' nuit'+(s.nights>1?"s":"")+' renseignée'+(s.nights>1?"s":"")+'</div>'+
-    '<div class="mono" style="font-size:15px;margin-top:4px">durée moy. '+hm(s.durAvg===null?null:Math.round(s.durAvg))+
-    ' · coucher '+(s.bedSD===null?"—":"±"+Math.round(s.bedSD)+" min")+'</div>'+
-    '<div class="tiny" style="margin-top:4px">La régularité (±) compte davantage que la durée.</div></div>'+
-    '<div class="card"><div class="tiny">Cardio 7 j</div>'+
-    '<div class="mono" style="font-size:15px;margin-top:4px">'+s.cardioSess+' séance'+(s.cardioSess>1?"s":"")+' ≥30 min · '+s.cardioVol+' min</div></div>'+
-    '<div class="card"><div class="tiny">Lecture ou méditation 7 j</div>'+
-    '<div class="mono" style="font-size:15px;margin-top:4px">'+s.focusSess+' séance'+(s.focusSess>1?"s":"")+' ≥10 min · '+s.focusVol+' min</div></div>'+
-    '<div class="card"><div class="srow" style="margin-bottom:2px"><span class="tiny">Clarté mentale — 14 j</span>'+
-    '<span class="mono" style="font-size:13px;color:var(--teal)">'+(sp.clA!=null?"moy "+fmt(sp.clA):"")+'</span></div>'+spark("clarity","#7fb7a3")+'</div>'+
-    '<div class="card"><div class="srow" style="margin-bottom:2px"><span class="tiny">Humeur — 14 j</span>'+
-    '<span class="mono" style="font-size:13px;color:var(--blue)">'+(sp.moA!=null?"moy "+fmt(sp.moA):"")+'</span></div>'+spark("mood","#8ab4d8")+'</div>'+
-    '<button id="cpb" class="btn btn-teal" onclick="copyBilan()">Copier le bilan hebdo</button>'+
-    '<p class="note">Rendez-vous fixe : dimanche soir, copie le bilan et colle-le dans la conversation Claude. On analyse, on ajuste, rien d\u2019autre.</p>'+
-    '<div class="rowbtns" style="margin-top:10px">'+
-    '<button class="btn btn-ghost" style="flex:1" onclick="exportJSON()">Exporter (backup)</button>'+
-    '<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'imp\').click()">Importer</button></div>'+
-    '<input type="file" id="imp" accept=".json" onchange="importJSON(this)">'+
-    '<a class="link" href="tests.html">Tests cognitifs ›</a>'+
-    '<p class="note">Les données restent uniquement sur ce téléphone (localStorage). Exporte un backup de temps en temps : vider les données du navigateur les effacerait.</p>';
+  const s=stats(7), c=stats(win);
+  const st=(k,v)=>'<div class="st"><span class="k">'+k+'</span><span class="v mono">'+v+'</span></div>';
+  const wbtn=n=>'<button class="'+(win===n?"on":"")+'" onclick="setWin('+n+')">'+n+' j</button>';
+
+  return '<div class="card">'+
+      st("7 derniers jours", s.logged+"/7 jours loggés")+
+      st("Sommeil", (s.dur.m==null?"—":hm(s.dur.m)+(s.dur.sd==null?"":" ± "+Math.round(s.dur.sd)+" min"))+
+         "<br>coucher "+(s.bedSD==null?"—":"± "+Math.round(s.bedSD)+" min")+" · qualité "+pm(s.sq.m,s.sq.sd,"/10"))+
+      st("Cardio", s.cardioSess+" × ≥"+CARDIO_MIN+" min · "+s.cardioVol+" min")+
+      st("Lecture / médit.", s.focusSess+" × ≥"+FOCUS_MIN+" min · "+s.focusVol+" min")+
+    '</div>'+
+    '<div class="card">'+
+      '<div class="chips win">'+wbtn(14)+wbtn(30)+wbtn(90)+'</div>'+
+      '<div class="srow" style="margin-bottom:2px"><span class="tiny">Clarté mentale</span>'+
+      '<span class="mono" style="font-size:12.5px;color:var(--teal)">'+pm(c.cl.m,c.cl.sd,"/10")+' · var '+fmt(c.cl.v)+'</span></div>'+
+      spark("clarity","#7fb7a3")+
+      '<div class="sep"></div>'+
+      '<div class="srow" style="margin-bottom:2px"><span class="tiny">Humeur</span>'+
+      '<span class="mono" style="font-size:12.5px;color:var(--blue)">'+pm(c.mo.m,c.mo.sd,"/10")+' · var '+fmt(c.mo.v)+'</span></div>'+
+      spark("mood","#8ab4d8")+
+      '<p class="note">± = dispersion. « var » = variation moyenne d\u2019un jour au suivant : c\u2019est elle qui mesure la stabilité, pas la moyenne.</p>'+
+    '</div>'+
+    '<div class="card">'+
+      '<button id="cpb" class="btn btn-teal" onclick="copyBilan()">Copier le bilan hebdo</button>'+
+      '<div class="rowbtns" style="margin-top:10px">'+
+      '<button class="btn btn-ghost" style="flex:1" onclick="exportAll()">Exporter tout</button>'+
+      '<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'imp\').click()">Importer</button></div>'+
+      '<input type="file" id="imp" accept=".json" onchange="importAll(this)">'+
+      '<a class="link" href="tests.html">Tests cognitifs ›</a>'+
+      '<p class="note">Rendez-vous fixe : dimanche soir, bilan copié dans la conversation. « Exporter tout » sort le suivi et les tests dans un seul fichier — données locales à ce téléphone uniquement, pense au backup.</p>'+
+    '</div>';
 }
 
 render();

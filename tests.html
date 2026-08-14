@@ -120,13 +120,7 @@
   <div class="label">Historique</div>
   <div class="card"><div class="hist" id="hist"></div></div>
 
-  <button class="btn btn-teal" id="cpb" onclick="copyResults()">Copier les résultats</button>
-  <div class="row" style="margin-top:10px">
-    <button class="btn btn-ghost" onclick="exportJSON()">Exporter (backup)</button>
-    <button class="btn btn-ghost" onclick="document.getElementById('imp').click()">Importer</button>
-  </div>
-  <input type="file" id="imp" accept=".json" class="hidden" onchange="importJSON(this)">
-  <p class="note">Données stockées sur ce téléphone uniquement, séparément du suivi quotidien. Les valeurs absolues du PVT incluent la latence de l'écran tactile : elles ne se comparent pas à des normes publiées, seulement à tes propres runs.</p>
+  <p class="note">Données stockées sur ce téléphone uniquement. L'export se fait depuis <a href="index.html" style="color:var(--mut)">Suivi › Données › Exporter tout</a> : un seul fichier contenant le suivi quotidien et les tests. Les valeurs absolues du PVT incluent la latence de l'écran tactile : elles ne se comparent pas à des normes publiées, seulement à tes propres runs.</p>
 </div>
 
 <div id="stage">
@@ -522,37 +516,6 @@ function renderHome(){
   h.innerHTML = [...T.runs].reverse().slice(0,12).map(r =>
     '<span class="d">'+frShort(r.day)+" "+hhmm(r.ts)+'</span> — '+fmtRun(r)
   ).join("<br>");
-}
-
-function summaryText(){
-  const lines = ["TESTS — " + frShort(today())];
-  TESTS.forEach(t => {
-    const runs = T.runs.filter(r => r.test === t);
-    if(!runs.length) return;
-    const last = runs[runs.length-1];
-    lines.push(fmtRun(last) + " · " + frShort(last.day) + " " + hhmm(last.ts) + " · run n°" + runs.length);
-  });
-  return lines.join("\n");
-}
-function copyResults(){
-  const txt = summaryText();
-  const done = () => { const b = document.getElementById("cpb"); b.textContent = "Copié"; setTimeout(()=>b.textContent="Copier les résultats", 1800); };
-  if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(()=>{fb(txt);done();}); }
-  else { fb(txt); done(); }
-}
-function fb(t){ const ta=document.createElement("textarea"); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); }
-function exportJSON(){
-  const blob = new Blob([JSON.stringify(T,null,1)],{type:"application/json"});
-  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-  a.download = "tests-backup-"+today()+".json"; a.click(); URL.revokeObjectURL(a.href);
-}
-function importJSON(input){
-  const f = input.files[0]; if(!f) return;
-  const rd = new FileReader();
-  rd.onload = () => { try{ const d = JSON.parse(rd.result);
-      if(d && Array.isArray(d.runs)){ T = d; save(); renderHome(); } else alert("Fichier invalide.");
-    }catch(e){ alert("Fichier invalide."); } };
-  rd.readAsText(f); input.value = "";
 }
 
 renderHome();
