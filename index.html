@@ -13,7 +13,7 @@
   :root{
     --bg:#111417; --card:#1a1e23; --card2:#242a31; --line:#2a2f35; --line2:#343b44;
     --txt:#e8e6e1; --mut:#9ca3af; --dim:#6b7280; --faint:#4b5563;
-    --teal:#7fb7a3; --blue:#8ab4d8; --amber:#e09f3e;
+    --teal:#7fb7a3; --blue:#8ab4d8; --amber:#e09f3e; --red:#d17b6e;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   body{margin:0; background:var(--bg); color:var(--txt);
@@ -68,7 +68,13 @@
   .btn-ghost{background:transparent; border:1px solid var(--line); color:var(--dim);}
   .btn-outline-teal{background:rgba(127,183,163,.10); border:1px solid var(--teal); color:var(--teal);}
   .btn-outline-grey{background:var(--card); border:1px solid var(--faint); color:#d1d5db;}
-  .btn-outline-neutral{background:var(--card); border:1px solid var(--line2); color:var(--mut);}
+  .btn-nat{background:var(--card); border:1px solid var(--line2); color:var(--txt);
+    display:flex; justify-content:space-between; align-items:center; text-align:left;}
+  .btn-nat .dot{width:11px; height:11px; border-radius:50%; margin-left:10px;}
+  .lg{display:flex; gap:12px; flex-wrap:wrap; font-size:11px; color:var(--dim); margin-top:8px;}
+  .lg i{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; font-style:normal;}
+  .evlist{font-size:12.5px; line-height:1.7;}
+  .evlist i{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; font-style:normal;}
   .chips{display:flex; flex-wrap:wrap; gap:8px; margin:10px 0;}
   .chips button{padding:8px 12px; border-radius:9px; font-size:13px; cursor:pointer;
     background:var(--card2); border:1px solid var(--line2); color:var(--mut);}
@@ -203,22 +209,19 @@ function stats(w){
   });
   const val = a => a.filter(v=>v!==null);
   const pack = a => ({m:mean(val(a)), sd:sd(val(a)), v:masd(a), n:val(a).length});
-  const rel=S.events.filter(e=>e.type==="rechute").map(e=>e.day).sort();
-  let cur=null, avg=null;
-  if(rel.length){
-    cur=diff(rel[rel.length-1],t);
-    if(rel.length>=2){ const g=[]; for(let i=1;i<rel.length;i++) g.push(diff(rel[i-1],rel[i])); avg=mean(g); }
-  }
   return {keys, logged, nights, cardioSess, focusSess, cardioVol, focusVol,
     bedSD:sd(beds), dur:pack(ser.dur), sq:pack(ser.sleepQ),
-    cl:pack(ser.clarity), mo:pack(ser.mood), ur:pack(ser.urge), ser, cur, avg};
+    cl:pack(ser.clarity), mo:pack(ser.mood), ur:pack(ser.urge), ser};
 }
 
 function bilan(){
   const s=stats(7), t=today();
   const ev=S.events.filter(e=>diff(e.day,t)<=6 && diff(e.day,t)>=0);
-  const re=ev.filter(e=>e.type==="rechute"), rs=ev.filter(e=>e.type==="resistee"), so=ev.filter(e=>e.type==="solo");
-  const tg=a=>a.length?" ("+a.map(e=>e.trigger.toLowerCase()).join(", ")+")":"";
+  const byNat = k => ev.filter(e=>natureOf(e)===k);
+  const line = k => {
+    const a=byNat(k); if(!a.length) return null;
+    return "  "+NATURES[k].label+" : "+a.map(e=>frShort(e.day)+(e.trigger?" ("+e.trigger.toLowerCase()+")":"")).join(", ");
+  };
   return [
     "SUIVI "+frShort(addD(t,-6))+" → "+frShort(t),
     "Jours loggés : "+s.logged+"/7",
@@ -230,17 +233,24 @@ function bilan(){
     "Clarté : "+pm(s.cl.m,s.cl.sd,"/10")+" · variation j/j "+fmt(s.cl.v),
     "Humeur : "+pm(s.mo.m,s.mo.sd,"/10")+" · variation j/j "+fmt(s.mo.v),
     "Pulsion : "+pm(s.ur.m,s.ur.sd,"/10")+" · max "+(s.ur.n?Math.max.apply(null,s.ser.urge.filter(v=>v!==null)):"—")+" · soirs ≥4 : "+s.ser.urge.filter(v=>v!==null&&v>=4).length,
-    "Événements 7 j : "+rs.length+" envie(s) passée(s)"+tg(rs)+" · "+so.length+" sans contenu"+tg(so)+" · "+re.length+" rechute(s)"+tg(re),
-    "Intervalle courant : "+(s.cur==null?"—":s.cur+" j")+(s.avg!=null?" · moyenne : "+fmt(s.avg)+" j":"")
-  ].join("\n");
+    "Événements 7 j :"
+  ].concat(NAT_ORDER.map(line).filter(Boolean).length ? NAT_ORDER.map(line).filter(Boolean) : ["  aucun"])
+   .join("\n");
 }
 
 // ---------- Sparkline ----------
 // Repères verticaux : rechutes (ambre) et passations de tests (gris).
 // Même axe temporel que la courbe, sans graphique supplémentaire.
-let MARKS = { rel:new Set(), test:new Set() };
+let MARKS = { nat:{}, test:new Set() };
 function refreshMarks(){
-  MARKS.rel = new Set(S.events.filter(e=>e.type==="rechute").map(e=>e.day));
+  // Un jour peut porter plusieurs événements : on garde le plus "lourd" pour la couleur.
+  const rank = {contenu:3, sans:2, partenaire:1};
+  MARKS.nat = {};
+  S.events.forEach(e=>{
+    const n = natureOf(e); if(!n) return;
+    const prev = MARKS.nat[e.day];
+    if(!prev || rank[n] > rank[prev]) MARKS.nat[e.day] = n;
+  });
   const t = readTests();
   MARKS.test = new Set((t && Array.isArray(t.runs) ? t.runs : []).map(r=>r.day).filter(Boolean));
 }
@@ -262,7 +272,8 @@ function spark(field,color){
   s.keys.forEach((k,i)=>{
     const X=x(i).toFixed(1);
     if(MARKS.test.has(k)) marks+='<line x1="'+X+'" x2="'+X+'" y1="'+p+'" y2="'+(h-p)+'" stroke="#4b5563" stroke-width="1" stroke-dasharray="2 2"/>';
-    if(MARKS.rel.has(k))  marks+='<line x1="'+X+'" x2="'+X+'" y1="'+p+'" y2="'+(h-p)+'" stroke="#e09f3e" stroke-width="1.3" opacity=".75"/>';
+    const nat = MARKS.nat[k];
+    if(nat) marks+='<line x1="'+X+'" x2="'+X+'" y1="'+p+'" y2="'+(h-p)+'" stroke="'+NATURES[nat].color+'" stroke-width="1.6" opacity=".85"/>';
   });
   return '<svg class="spark" viewBox="0 0 '+w+' '+h+'">'+grid+marks+'<path d="'+path+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'+dots+'</svg>';
 }
@@ -373,30 +384,48 @@ function viewJour(){
 }
 
 const TRIGGERS=["Fatigue","Ennui","Seul le soir","Stress / conflit","Sans raison claire","Autre"];
-function pickType(t){ urgeType=t; render(); }
-function pickTrig(i){ urgeTrig=TRIGGERS[i]; render(); }
-function logEvent(){
-  if(!urgeType||!urgeTrig) return;
-  S.events.push({id:Date.now(), day:today(), ts:new Date().toISOString(), type:urgeType, trigger:urgeTrig});
-  save();
-  const t=urgeType; urgeType=null; urgeTrig=null; render();
-  flash(t==="rechute"
-    ? "Enregistré comme donnée. Pas de procès. Prochaine action : protéger le sommeil de ce soir — coucher à l'heure prévue, téléphone hors chambre."
-    : t==="solo"
-    ? "Enregistré. Donnée neutre : aucun compteur remis à zéro."
-    : "Enregistré. Une envie passée est une répétition réussie.");
+// Une seule dimension : la nature de l'acte. Pas d'issue, pas d'intervalle.
+const NATURES = {
+  contenu:    {label:"Seul, avec contenu",  color:"#d17b6e", css:"var(--red)"},
+  sans:       {label:"Seul, sans contenu",  color:"#e09f3e", css:"var(--amber)"},
+  partenaire: {label:"Avec partenaire",     color:"#7fb7a3", css:"var(--teal)"}
+};
+const NAT_ORDER = ["contenu","sans","partenaire"];
+// Les événements d'avant la v1.2 portaient un champ "type" : on les relit sans les réécrire.
+function natureOf(e){
+  if(e.nature) return e.nature;
+  if(e.type==="rechute") return "contenu";
+  if(e.type==="solo") return "sans";
+  return null;                       // "resistee" : plus une catégorie, ignorée
 }
+function pickType(t){
+  urgeType=t;
+  // Avec partenaire : pas de question de déclencheur, ce n'est pas un symptôme.
+  if(t==="partenaire"){ pushEvent("partenaire", null); return; }
+  render();
+}
+function pickTrig(i){ urgeTrig=TRIGGERS[i]; render(); }
+function pushEvent(nature, trigger){
+  S.events.push({id:Date.now(), day:today(), ts:new Date().toISOString(), nature:nature, trigger:trigger});
+  save(); urgeType=null; urgeTrig=null; render();
+  flash(nature==="contenu"
+    ? "Enregistré comme donnée. Pas de procès. Prochaine action : protéger le sommeil de ce soir — coucher à l'heure prévue, téléphone hors chambre."
+    : "Enregistré.");
+}
+function logEvent(){ if(!urgeType||!urgeTrig) return; pushEvent(urgeType, urgeTrig); }
 
 function viewPulsion(){
   let h='<div class="card"><div style="font-size:14px;font-weight:500;margin-bottom:6px">Protocole 10 minutes</div><ol>'+
     '<li>1. Pas d\u2019interdiction : tu décides dans 10 min, pas maintenant.</li>'+
     '<li>2. Une action physique tout de suite : sortir marcher, pompes, douche, atelier.</li>'+
-    '<li>3. Après 10 min, tu logges le résultat ici. Dans les deux cas, c\u2019est une donnée.</li></ol></div>';
+    '<li>3. S\u2019il y a acte, tu le logges ci-dessous. Sinon, rien à faire.</li></ol></div>';
   if(urgeType===null){
-    h+='<div style="display:flex;flex-direction:column;gap:8px">'+
-      '<button class="btn btn-outline-teal" style="padding:15px 0" onclick="pickType(\'resistee\')">Envie passée</button>'+
-      '<button class="btn btn-outline-neutral" style="padding:15px 0" onclick="pickType(\'solo\')">Sans contenu</button>'+
-      '<button class="btn btn-outline-grey" style="padding:15px 0" onclick="pickType(\'rechute\')">Rechute</button></div>';
+    h+='<div style="display:flex;flex-direction:column;gap:8px">';
+    NAT_ORDER.forEach(k=>{
+      h+='<button class="btn btn-nat" style="padding:15px 16px" onclick="pickType(\''+k+'\')">'+
+         '<span>'+NATURES[k].label+'</span><span class="dot" style="background:'+NATURES[k].css+'"></span></button>';
+    });
+    h+='</div>';
   }else{
     h+='<div class="card"><div style="font-size:13.5px;color:var(--mut)">Déclencheur principal ?</div><div class="chips">';
     TRIGGERS.forEach((t,i)=>{ h+='<button class="'+(urgeTrig===t?"on":"")+'" onclick="pickTrig('+i+')">'+t+'</button>'; });
@@ -404,7 +433,7 @@ function viewPulsion(){
       '<button class="btn btn-teal" style="flex:1;opacity:'+(urgeTrig?1:.4)+'" onclick="logEvent()">Enregistrer</button>'+
       '<button class="btn btn-ghost" style="width:auto;padding:13px 18px" onclick="pickType(null)">Annuler</button></div></div>';
   }
-  h+='<p class="note">La métrique n\u2019est pas zéro rechute. C\u2019est l\u2019allongement des intervalles et un crash post-rechute plus court. Une rechute loggée avec son déclencheur vaut plus qu\u2019une semaine parfaite sans données.</p>';
+  h+='<p class="note">Aucun compteur, aucune remise à zéro : on enregistre une date et une nature, rien d\u2019autre. Ce qui compte se lit sur les courbes, dans les jours qui suivent.</p>';
   return h;
 }
 
@@ -444,6 +473,16 @@ function copyBilan(){
 function fallbackCopy(t){ const ta=document.createElement("textarea"); ta.value=t; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); }
 
 // ---------- Onglet Données : trois blocs ----------
+function evList(){
+  const a = S.events.filter(e=>natureOf(e)).slice(-8).reverse();
+  if(!a.length) return '<span style="color:var(--faint)">aucun</span>';
+  return a.map(function(e){
+    const n=natureOf(e);
+    return '<i style="background:'+NATURES[n].css+'"></i>'+frShort(e.day)+
+      ' <span style="color:var(--dim)">'+NATURES[n].label.toLowerCase()+
+      (e.trigger?' · '+e.trigger.toLowerCase():'')+'</span>';
+  }).join("<br>");
+}
 function viewDonnees(){
   const s=stats(7), c=stats(win);
   const st=(k,v)=>'<div class="st"><span class="k">'+k+'</span><span class="v mono">'+v+'</span></div>';
@@ -465,7 +504,14 @@ function viewDonnees(){
       '<div class="srow" style="margin-bottom:2px"><span class="tiny">Humeur</span>'+
       '<span class="mono" style="font-size:12.5px;color:var(--blue)">'+pm(c.mo.m,c.mo.sd,"/10")+' · var '+fmt(c.mo.v)+'</span></div>'+
       spark("mood","#8ab4d8")+
-      '<p class="note">± = dispersion. « var » = variation moyenne d\u2019un jour au suivant : c\u2019est elle qui mesure la stabilité, pas la moyenne.<br>Traits verticaux : <span style="color:var(--amber)">ambre = rechute</span>, gris pointillé = passation de test.</p>'+
+      '<p class="note">± = dispersion. « var » = variation moyenne d\u2019un jour au suivant : c\u2019est elle qui mesure la stabilité, pas la moyenne.</p>'+
+      '<div class="lg">'+NAT_ORDER.map(function(k){
+        return '<span><i style="background:'+NATURES[k].css+'"></i>'+NATURES[k].label+'</span>';
+      }).join("")+'<span><i style="background:var(--faint)"></i>test</span></div>'+
+    '</div>'+
+    '<div class="card">'+
+      '<div class="tiny" style="margin-bottom:6px">Derniers événements</div>'+
+      '<div class="evlist">'+evList()+'</div>'+
     '</div>'+
     '<div class="card">'+
       '<button id="cpb" class="btn btn-teal" onclick="copyBilan()">Copier le bilan hebdo</button>'+
