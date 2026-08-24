@@ -47,6 +47,7 @@
   input[type=range]::-moz-range-thumb{width:26px; height:26px; border-radius:50%; cursor:pointer; border:none;}
   .r-teal::-webkit-slider-thumb{background:var(--teal);} .r-teal::-moz-range-thumb{background:var(--teal);}
   .r-blue::-webkit-slider-thumb{background:var(--blue);} .r-blue::-moz-range-thumb{background:var(--blue);}
+  .r-amber::-webkit-slider-thumb{background:var(--amber);} .r-amber::-moz-range-thumb{background:var(--amber);}
 
   .timerow{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .tf{display:flex; flex-direction:column; gap:5px;}
@@ -67,6 +68,7 @@
   .btn-ghost{background:transparent; border:1px solid var(--line); color:var(--dim);}
   .btn-outline-teal{background:rgba(127,183,163,.10); border:1px solid var(--teal); color:var(--teal);}
   .btn-outline-grey{background:var(--card); border:1px solid var(--faint); color:#d1d5db;}
+  .btn-outline-neutral{background:var(--card); border:1px solid var(--line2); color:var(--mut);}
   .chips{display:flex; flex-wrap:wrap; gap:8px; margin:10px 0;}
   .chips button{padding:8px 12px; border-radius:9px; font-size:13px; cursor:pointer;
     background:var(--card2); border:1px solid var(--line2); color:var(--mut);}
@@ -122,10 +124,10 @@ let urgeType = null, urgeTrig = null;
 let win = 14;                 // fenêtre des courbes
 let saveTimer = null;
 
-const EMPTY = { bed:null, wake:null, sleepQ:null, cardioMin:null, focusMin:null, clarity:null, mood:null };
-// "cardio", "focus", "sleep" et "urge" sont d'anciens champs : encore lus pour détecter
+const EMPTY = { bed:null, wake:null, sleepQ:null, cardioMin:null, focusMin:null, clarity:null, mood:null, urge:null };
+// "cardio", "focus" et "sleep" sont d'anciens champs : encore lus pour détecter
 // un jour rempli, plus jamais écrits.
-const FIELDS = ["bed","wake","sleepQ","cardioMin","focusMin","clarity","mood","cardio","focus","sleep","urge"];
+const FIELDS = ["bed","wake","sleepQ","cardioMin","focusMin","clarity","mood","urge","cardio","focus","sleep"];
 const CARDIO_MIN = 30, FOCUS_MIN = 10;
 
 function load(){
@@ -182,11 +184,11 @@ function stats(w){
   const t = today(), keys = [];
   for(let i=w-1;i>=0;i--) keys.push(addD(t,-i));
   let logged=0, nights=0, cardioSess=0, focusSess=0, cardioVol=0, focusVol=0;
-  const ser = {clarity:[], mood:[], sleepQ:[], dur:[]};
+  const ser = {clarity:[], mood:[], sleepQ:[], urge:[], dur:[]};
   const beds=[];
   keys.forEach(k=>{
     const d=S.days[k];
-    if(!d){ ser.clarity.push(null); ser.mood.push(null); ser.sleepQ.push(null); ser.dur.push(null); return; }
+    if(!d){ ser.clarity.push(null); ser.mood.push(null); ser.sleepQ.push(null); ser.urge.push(null); ser.dur.push(null); return; }
     const touched=FIELDS.some(f=>d[f]!==null&&d[f]!==undefined);
     if(touched) logged++;
     if(typeof d.cardioMin==="number"){ cardioVol+=d.cardioMin; if(d.cardioMin>=CARDIO_MIN) cardioSess++; }
@@ -196,6 +198,7 @@ function stats(w){
     ser.clarity.push(d.clarity!=null?d.clarity:null);
     ser.mood.push(d.mood!=null?d.mood:null);
     ser.sleepQ.push(d.sleepQ!=null?d.sleepQ:null);
+    ser.urge.push(d.urge!=null?d.urge:null);
     ser.dur.push(du);
   });
   const val = a => a.filter(v=>v!==null);
@@ -208,13 +211,13 @@ function stats(w){
   }
   return {keys, logged, nights, cardioSess, focusSess, cardioVol, focusVol,
     bedSD:sd(beds), dur:pack(ser.dur), sq:pack(ser.sleepQ),
-    cl:pack(ser.clarity), mo:pack(ser.mood), ser, cur, avg};
+    cl:pack(ser.clarity), mo:pack(ser.mood), ur:pack(ser.urge), ser, cur, avg};
 }
 
 function bilan(){
   const s=stats(7), t=today();
   const ev=S.events.filter(e=>diff(e.day,t)<=6 && diff(e.day,t)>=0);
-  const re=ev.filter(e=>e.type==="rechute"), rs=ev.filter(e=>e.type==="resistee");
+  const re=ev.filter(e=>e.type==="rechute"), rs=ev.filter(e=>e.type==="resistee"), so=ev.filter(e=>e.type==="solo");
   const tg=a=>a.length?" ("+a.map(e=>e.trigger.toLowerCase()).join(", ")+")":"";
   return [
     "SUIVI "+frShort(addD(t,-6))+" → "+frShort(t),
@@ -226,7 +229,8 @@ function bilan(){
     "Lecture/médit. : "+s.focusSess+" séance(s) ≥"+FOCUS_MIN+" min · "+s.focusVol+" min au total",
     "Clarté : "+pm(s.cl.m,s.cl.sd,"/10")+" · variation j/j "+fmt(s.cl.v),
     "Humeur : "+pm(s.mo.m,s.mo.sd,"/10")+" · variation j/j "+fmt(s.mo.v),
-    "Événements 7 j : "+rs.length+" envie(s) passée(s)"+tg(rs)+" · "+re.length+" rechute(s)"+tg(re),
+    "Pulsion : "+pm(s.ur.m,s.ur.sd,"/10")+" · max "+(s.ur.n?Math.max.apply(null,s.ser.urge.filter(v=>v!==null)):"—")+" · soirs ≥4 : "+s.ser.urge.filter(v=>v!==null&&v>=4).length,
+    "Événements 7 j : "+rs.length+" envie(s) passée(s)"+tg(rs)+" · "+so.length+" sans contenu"+tg(so)+" · "+re.length+" rechute(s)"+tg(re),
     "Intervalle courant : "+(s.cur==null?"—":s.cur+" j")+(s.avg!=null?" · moyenne : "+fmt(s.avg)+" j":"")
   ].join("\n");
 }
@@ -364,7 +368,8 @@ function viewJour(){
     durHtml("focusMin","Lecture ou méditation")+
     '<div class="label">État du jour</div>'+
     sliderHtml("clarity","Clarté mentale","r-teal","var(--teal)")+
-    sliderHtml("mood","Humeur","r-blue","var(--blue)");
+    sliderHtml("mood","Humeur","r-blue","var(--blue)")+
+    sliderHtml("urge","Pression de l\u2019envie","r-amber","var(--amber)");
 }
 
 const TRIGGERS=["Fatigue","Ennui","Seul le soir","Stress / conflit","Sans raison claire","Autre"];
@@ -377,6 +382,8 @@ function logEvent(){
   const t=urgeType; urgeType=null; urgeTrig=null; render();
   flash(t==="rechute"
     ? "Enregistré comme donnée. Pas de procès. Prochaine action : protéger le sommeil de ce soir — coucher à l'heure prévue, téléphone hors chambre."
+    : t==="solo"
+    ? "Enregistré. Donnée neutre : aucun compteur remis à zéro."
     : "Enregistré. Une envie passée est une répétition réussie.");
 }
 
@@ -386,9 +393,10 @@ function viewPulsion(){
     '<li>2. Une action physique tout de suite : sortir marcher, pompes, douche, atelier.</li>'+
     '<li>3. Après 10 min, tu logges le résultat ici. Dans les deux cas, c\u2019est une donnée.</li></ol></div>';
   if(urgeType===null){
-    h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'+
-      '<button class="btn btn-outline-teal" style="padding:16px 0" onclick="pickType(\'resistee\')">Envie passée</button>'+
-      '<button class="btn btn-outline-grey" style="padding:16px 0" onclick="pickType(\'rechute\')">Rechute</button></div>';
+    h+='<div style="display:flex;flex-direction:column;gap:8px">'+
+      '<button class="btn btn-outline-teal" style="padding:15px 0" onclick="pickType(\'resistee\')">Envie passée</button>'+
+      '<button class="btn btn-outline-neutral" style="padding:15px 0" onclick="pickType(\'solo\')">Sans contenu</button>'+
+      '<button class="btn btn-outline-grey" style="padding:15px 0" onclick="pickType(\'rechute\')">Rechute</button></div>';
   }else{
     h+='<div class="card"><div style="font-size:13.5px;color:var(--mut)">Déclencheur principal ?</div><div class="chips">';
     TRIGGERS.forEach((t,i)=>{ h+='<button class="'+(urgeTrig===t?"on":"")+'" onclick="pickTrig('+i+')">'+t+'</button>'; });
