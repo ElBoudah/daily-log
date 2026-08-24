@@ -272,7 +272,7 @@ function startSDMT(){
   SYM.forEach((s,i)=>{ key += '<div class="keypair"><span class="s">'+s+'</span><span class="d">'+(i+1)+'</span></div>'; });
   key += '</div>';
   mid('<div class="stage-title">Vitesse de traitement — 90 s</div>'+key+
-      '<div class="stage-body">Chaque symbole correspond à un chiffre. Un symbole s\'affiche, tape le chiffre correspondant, le plus vite possible. La grille de correspondance reste affichée pendant tout le test.</div>'+
+      '<div class="stage-body">Chaque symbole correspond à un chiffre. Un symbole s\'affiche, tape le chiffre correspondant — vite, mais <b>sans erreur</b> : au-delà de 5 % d\'erreurs, la passation ne mesure plus rien et ne compte pas. La grille reste affichée pendant tout le test.</div>'+
       '<button class="btn btn-teal" style="max-width:300px" id="go">Commencer</button>');
   document.getElementById("go").onclick = runSDMT;
 }
@@ -312,12 +312,17 @@ function runSDMT(){
   stageCleanup = cleanup;
   function finish(){
     cleanup();
-    const m = { correct, errors, total:correct+errors };
-    resultScreen("Substitution terminée", [
+    const total = correct + errors;
+    const errPct = total ? Math.round(errors/total*1000)/10 : 0;
+    const valid = errPct <= 5;
+    const m = { correct, errors, total, errPct, valid };
+    const lines = [
       "Corrects : <b>"+correct+"</b>",
-      "Erreurs : <b>"+errors+"</b>",
-      "Total : <b>"+m.total+"</b> réponses en 90 s"
-    ], () => addRun("sdmt", m));
+      "Erreurs : <b>"+errors+"</b> ("+String(errPct).replace(".",",")+" %)",
+      "Total : <b>"+total+"</b> réponses en 90 s"
+    ];
+    if(!valid) lines.push('<span style="color:var(--amber)">Plus de 5 % d\u2019erreurs : passation enregistrée mais non valide pour la tendance. Refais-la dimanche prochain, en visant zéro erreur.</span>');
+    resultScreen("Substitution terminée", lines, () => addRun("sdmt", m));
   }
   next();
   setTimeout(()=>{ if(!done) finish(); }, DUR + 200);

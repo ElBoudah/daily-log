@@ -147,7 +147,12 @@ function save(){
     el.classList.add("on"); setTimeout(()=>el.classList.remove("on"), 1400);
   }catch(e){ alert("Échec de sauvegarde — exporte tes données par sécurité."); }
 }
-function saveSoon(){ clearTimeout(saveTimer); saveTimer = setTimeout(save, 350); }
+function saveSoon(){ clearTimeout(saveTimer); saveTimer = setTimeout(()=>{ saveTimer=null; save(); }, 350); }
+// Une PWA mise en arrière-plan ou fermée tue le JS immédiatement : un save différé
+// en attente est perdu. D'où le flush systématique dès que la page devient invisible.
+function flushSave(){ if(saveTimer){ clearTimeout(saveTimer); saveTimer=null; save(); } }
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="hidden") flushSave(); });
+window.addEventListener("pagehide", flushSave);
 
 // ---------- Dates ----------
 function today(){ return keyOf(new Date()); }
@@ -319,6 +324,7 @@ function slide(f, el){
 }
 function setTime(f, el){
   setField(f, el.value || null, false);
+  flushSave();                         // saisie discrète : on persiste tout de suite
   const o = document.getElementById("out-dur");
   if(o) o.textContent = hm(durMin(dayGet()));
 }
@@ -418,7 +424,8 @@ function viewPulsion(){
   let h='<div class="card"><div style="font-size:14px;font-weight:500;margin-bottom:6px">Protocole 10 minutes</div><ol>'+
     '<li>1. Pas d\u2019interdiction : tu décides dans 10 min, pas maintenant.</li>'+
     '<li>2. Une action physique tout de suite : sortir marcher, pompes, douche, atelier.</li>'+
-    '<li>3. S\u2019il y a acte, tu le logges ci-dessous. Sinon, rien à faire.</li></ol></div>';
+    '<li>3. S\u2019il y a acte, tu le logges ci-dessous. Sinon, rien à faire.</li></ol>'+
+    '<p class="note" style="margin-top:10px">« Contenu » = tout support pornographique ou érotique, quel que soit le site, l\u2019app ou le format (vidéo, images, reddit, réseaux). Définition fixée à froid — pas renégociable sur le moment.</p></div>';
   if(urgeType===null){
     h+='<div style="display:flex;flex-direction:column;gap:8px">';
     NAT_ORDER.forEach(k=>{
