@@ -113,6 +113,14 @@
   </div>
 
   <div class="card">
+    <div class="t-name">Empan de chiffres inversé</div>
+    <div class="t-meta">~2 min · mémoire de travail · les 2-3 premières passations calibrent la stratégie</div>
+    <div class="t-last" id="last-span"></div>
+    <div class="chart" id="ch-span"></div>
+    <div style="margin-top:12px"><button class="btn btn-outline" onclick="startSpan()">Lancer</button></div>
+  </div>
+
+  <div class="card">
     <div class="t-name">Fluence verbale</div>
     <div class="t-meta">2 × 60 s · accès au lexique, à voix haute</div>
     <div class="t-last" id="last-flu"></div>
@@ -328,6 +336,96 @@ function runSDMT(){
   setTimeout(()=>{ if(!done) finish(); }, DUR + 200);
 }
 
+// ---------- 2b. Empan de chiffres inversé ----------
+// Mémoire de travail (WAIS-style adaptatif). Séquences aléatoires : pas d'apprentissage
+// de contenu, seulement de stratégie (2-3 passations), puis chaque point est comparable.
+// Protocole : départ à 2 chiffres. Réussite -> longueur +1. Échec -> second essai à la
+// même longueur (nouvelle séquence). Deux échecs à la même longueur -> fin.
+// Score = plus longue séquence correctement restituée à l'envers.
+function startSpan(){
+  openStage("Empan inversé");
+  mid('<div class="stage-title">Mémoire de travail — ~2 min</div>'+
+      '<div class="stage-body">Des chiffres s\'affichent <b>un par un</b>. À la fin de la séquence, tape-les dans l\'ordre <b>inverse</b> — le dernier vu en premier. Réussite : la séquence s\'allonge. Deux échecs à la même longueur : fin du test. Sans répéter à voix haute ni écrire.</div>'+
+      '<button class="btn btn-teal" style="max-width:300px" id="go">Commencer</button>');
+  document.getElementById("go").onclick = runSpan;
+}
+function runSpan(){
+  let len = 2, trial = 1, best = 0, trials = 0, correctN = 0;
+  let timers = [], done = false;
+  function cleanup(){ done = true; timers.forEach(clearTimeout); timers = []; }
+  stageCleanup = cleanup;
+
+  function seq(n){
+    const out = [];
+    while(out.length < n){
+      const d = 1 + Math.floor(Math.random()*9);
+      if(out.length && out[out.length-1] === d) continue;   // jamais deux fois le même de suite
+      out.push(d);
+    }
+    return out;
+  }
+
+  function show(){
+    setTimerText("longueur "+len+" · essai "+trial+"/2");
+    const s = seq(len);
+    mid('<div class="glyph mono" id="glyph" style="min-height:70px"></div>'+
+        '<div class="stage-body" id="hint">Regarde…</div>');
+    const g = document.getElementById("glyph");
+    s.forEach((d,i)=>{                                       // 800 ms visible + 200 ms blanc
+      timers.push(setTimeout(()=>{ if(!done) g.textContent = d; }, i*1000));
+      timers.push(setTimeout(()=>{ if(!done) g.textContent = ""; }, i*1000 + 800));
+    });
+    timers.push(setTimeout(()=>{ if(!done) answer(s); }, s.length*1000 + 150));
+  }
+
+  function answer(s){
+    const target = [...s].reverse();
+    let entered = [];
+    let pad = '<div class="pad">';
+    for(let i=1;i<=9;i++) pad += '<button data-d="'+i+'">'+i+'</button>';
+    pad += '<button data-d="del" style="grid-column:span 3;font-size:15px">⌫ corriger</button></div>';
+    mid('<div class="stage-body">Dans l\'ordre <b>inverse</b> :</div>'+
+        '<div class="glyph mono" id="entry" style="font-size:34px;min-height:44px;letter-spacing:.18em"></div>'+pad);
+    const entry = document.getElementById("entry");
+    document.querySelectorAll(".pad button").forEach(b=>{
+      b.onclick = () => {
+        if(done) return;
+        if(b.dataset.d === "del"){ entered.pop(); entry.textContent = entered.join(""); return; }
+        if(entered.length >= target.length) return;
+        entered.push(Number(b.dataset.d));
+        entry.textContent = entered.join("");
+        if(entered.length === target.length) check(entered, target);
+      };
+    });
+  }
+
+  function check(entered, target){
+    trials++;
+    const ok = entered.every((d,i)=> d === target[i]);
+    if(ok){ correctN++; best = Math.max(best, len); }
+    mid('<div class="stage-title">'+(ok ? "✓" : "✕")+'</div>'+
+        '<div class="stage-body">'+(ok
+          ? '<span style="color:var(--teal)">Juste — longueur '+len+'.</span>'
+          : '<span style="color:var(--amber)">Raté.</span>')+'</div>');
+    if(ok){ len++; trial = 1; }
+    else if(trial === 1){ trial = 2; }
+    else { finish(); return; }
+    if(len > 9){ finish(); return; }
+    timers.push(setTimeout(()=>{ if(!done) show(); }, 900));
+  }
+
+  function finish(){
+    cleanup();
+    const m = { span: best, trials, correct: correctN };
+    resultScreen("Empan terminé", [
+      "Empan inversé : <b>"+(best || "—")+"</b>",
+      "Essais réussis : <b>"+correctN+"</b> / "+trials,
+      '<span style="color:var(--dim)">Les 2-3 premières passations calibrent la stratégie : la tendance ne compte qu\'après. Comparaison à toi-même uniquement, même créneau horaire.</span>'
+    ], () => addRun("span", m));
+  }
+  show();
+}
+
 // ---------- 3. Fluence verbale ----------
 const CATS = ["animaux","fruits et légumes","métiers","vêtements","objets de la cuisine","moyens de transport"];
 const LETS = ["P","R","V","L","M","T"];
@@ -457,6 +555,7 @@ function fmtRun(r){
   if(r.test === "pvt") return "PVT " + (m.median??"—") + " ms · " + m.lapses + " lapses";
   if(r.test === "sdmt") return "Substitution " + m.correct + " corrects · " + m.errors + " err.";
   if(r.test === "phq") return "PHQ-8 " + m.score + "/24 · " + m.band;
+  if(r.test === "span") return "Empan inversé " + m.span + " · " + m.correct + "/" + m.trials + " essais";
   return "Fluence " + m.sem + " / " + m.pho;
 }
 function lastOf(test){
@@ -476,10 +575,12 @@ const CHARTS = {
   flu:  { title:"Mots — catégorielle / phonémique",
           series:[{ get:r=>r.metrics.sem, color:"var(--teal)", name:"cat." },
                   { get:r=>r.metrics.pho, color:"var(--amber)", name:"lettre" }] },
+  span: { title:"Empan inversé — plus haut = mieux",
+          series:[{ get:r=>r.metrics.span, color:"var(--amber)", name:"" }] },
   phq:  { title:"Score /24 — plus bas = mieux",
           series:[{ get:r=>r.metrics.score, color:"var(--blue)", name:"" }] }
 };
-const TESTS = ["pvt","sdmt","flu","phq"];
+const TESTS = ["pvt","sdmt","span","flu","phq"];
 
 function chartHtml(test){
   const cfg = CHARTS[test];
