@@ -114,18 +114,10 @@
 
   <div class="card">
     <div class="t-name">Empan de chiffres inversé</div>
-    <div class="t-meta">~2 min · mémoire de travail · les 2-3 premières passations calibrent la stratégie</div>
+    <div class="t-meta">~2 min · mémoire de travail · hebdomadaire (dimanche)</div>
     <div class="t-last" id="last-span"></div>
     <div class="chart" id="ch-span"></div>
     <div style="margin-top:12px"><button class="btn btn-outline" onclick="startSpan()">Lancer</button></div>
-  </div>
-
-  <div class="card">
-    <div class="t-name">Fluence verbale</div>
-    <div class="t-meta">2 × 60 s · accès au lexique, à voix haute</div>
-    <div class="t-last" id="last-flu"></div>
-    <div class="chart" id="ch-flu"></div>
-    <div style="margin-top:12px"><button class="btn btn-outline" onclick="startFlu()">Lancer</button></div>
   </div>
 
   <div class="card">
@@ -426,62 +418,8 @@ function runSpan(){
   show();
 }
 
-// ---------- 3. Fluence verbale ----------
-const CATS = ["animaux","fruits et légumes","métiers","vêtements","objets de la cuisine","moyens de transport"];
-const LETS = ["P","R","V","L","M","T"];
-function fluSets(){ const w = weekIndex(); return { cat: CATS[w % CATS.length], let: LETS[(w+2) % LETS.length] }; }
-
-function startFlu(){
-  const s = fluSets();
-  openStage("Fluence");
-  mid('<div class="stage-title">Fluence verbale — 2 × 60 s</div>'+
-      '<div class="stage-body">Deux manches de 60 s. Tu énonces les mots <b>à voix haute</b> et tu tapes le gros bouton à chaque mot. Pas de noms propres, pas de variantes du même mot (chat, chatte, chaton = 1).<br><br>Manche 1 : catégorie <b>'+s.cat+'</b>.<br>Manche 2 : mots commençant par <b>'+s.let+'</b>.</div>'+
-      '<button class="btn btn-teal" style="max-width:300px" id="go">Commencer la manche 1</button>');
-  document.getElementById("go").onclick = () => runFlu(1, {});
-}
-function runFlu(round, acc){
-  const s = fluSets();
-  const DUR = 60000;
-  let count = 0, done = false;
-  const end = performance.now() + DUR;
-  const prompt = round === 1 ? "Catégorie : " + s.cat : "Mots commençant par " + s.let;
-
-  mid('<div class="stage-body" style="margin-bottom:2px">'+prompt+'</div>'+
-      '<div class="bigcount mono" id="c">0</div>'+
-      '<button class="tapbig" id="tap">+ 1 mot</button>'+
-      '<button class="btn btn-ghost" style="max-width:160px" id="undo">Annuler le dernier</button>');
-  const c = document.getElementById("c");
-  document.getElementById("tap").onclick = () => { if(!done){ count++; c.textContent = count; } };
-  document.getElementById("undo").onclick = () => { if(!done && count>0){ count--; c.textContent = count; } };
-
-  const tickTimer = setInterval(()=>setTimerText(mmss(end - performance.now())), 250);
-  setTimerText(mmss(DUR));
-  function cleanup(){ done = true; clearInterval(tickTimer); }
-  stageCleanup = cleanup;
-
-  setTimeout(() => {
-    if(done) return;
-    cleanup();
-    if(round === 1){
-      document.getElementById("stage-quit").classList.add("hidden");
-      setTimerText("");
-      mid('<div class="stage-title">Manche 1 terminée</div>'+
-          '<div class="res"><b>'+count+'</b> mots — '+s.cat+'</div>'+
-          '<div class="stage-body">Manche 2 : mots commençant par <b>'+s.let+'</b>.</div>'+
-          '<button class="btn btn-teal" style="max-width:300px" id="go2">Commencer la manche 2</button>');
-      document.getElementById("go2").onclick = () => {
-        document.getElementById("stage-quit").classList.remove("hidden");
-        runFlu(2, { sem: count, cat: s.cat });
-      };
-    } else {
-      const m = { sem: acc.sem, cat: acc.cat, pho: count, letter: s.let };
-      resultScreen("Fluence terminée", [
-        "Catégorielle ("+m.cat+") : <b>"+m.sem+"</b> mots",
-        "Phonémique (lettre "+m.letter+") : <b>"+m.pho+"</b> mots"
-      ], () => addRun("flu", m));
-    }
-  }, DUR);
-}
+// ---------- (Fluence verbale retirée le 30/08 — les runs historiques restent
+// dans l'export et l'historique via fmtRun.) ----------
 
 // ---------- 4. PHQ-8 ----------
 // 8 items, 0–3 chacun, total 0–24. C'est le PHQ-9 privé de son 9e item, qui est une
@@ -570,17 +508,14 @@ function lastOf(test){
 const CHARTS = {
   pvt:  { title:"Médiane, ms — plus bas = mieux",
           series:[{ get:r=>r.metrics.median, color:"var(--teal)", name:"" }] },
-  sdmt: { title:"Réponses correctes en 90 s",
-          series:[{ get:r=>r.metrics.correct, color:"var(--blue)", name:"" }] },
-  flu:  { title:"Mots — catégorielle / phonémique",
-          series:[{ get:r=>r.metrics.sem, color:"var(--teal)", name:"cat." },
-                  { get:r=>r.metrics.pho, color:"var(--amber)", name:"lettre" }] },
+  sdmt: { title:"Réponses correctes en 90 s — passations >5 % d'erreurs exclues",
+          series:[{ get:r=>(r.metrics.valid===false ? null : r.metrics.correct), color:"var(--blue)", name:"" }] },
   span: { title:"Empan inversé — plus haut = mieux",
           series:[{ get:r=>r.metrics.span, color:"var(--amber)", name:"" }] },
   phq:  { title:"Score /24 — plus bas = mieux",
           series:[{ get:r=>r.metrics.score, color:"var(--blue)", name:"" }] }
 };
-const TESTS = ["pvt","sdmt","span","flu","phq"];
+const TESTS = ["pvt","sdmt","span","phq"];
 
 function chartHtml(test){
   const cfg = CHARTS[test];

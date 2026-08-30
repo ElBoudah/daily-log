@@ -13,7 +13,7 @@
   :root{
     --bg:#111417; --card:#1a1e23; --card2:#242a31; --line:#2a2f35; --line2:#343b44;
     --txt:#e8e6e1; --mut:#9ca3af; --dim:#6b7280; --faint:#4b5563;
-    --teal:#7fb7a3; --blue:#8ab4d8; --amber:#e09f3e; --red:#d17b6e;
+    --teal:#7fb7a3; --blue:#8ab4d8; --amber:#e09f3e; --red:#d17b6e; --violet:#ab96d9;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
   body{margin:0; background:var(--bg); color:var(--txt);
@@ -48,6 +48,7 @@
   .r-teal::-webkit-slider-thumb{background:var(--teal);} .r-teal::-moz-range-thumb{background:var(--teal);}
   .r-blue::-webkit-slider-thumb{background:var(--blue);} .r-blue::-moz-range-thumb{background:var(--blue);}
   .r-amber::-webkit-slider-thumb{background:var(--amber);} .r-amber::-moz-range-thumb{background:var(--amber);}
+  .r-violet::-webkit-slider-thumb{background:var(--violet);} .r-violet::-moz-range-thumb{background:var(--violet);}
 
   .timerow{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .tf{display:flex; flex-direction:column; gap:5px;}
@@ -130,10 +131,10 @@ let urgeType = null, urgeTrig = null;
 let win = 14;                 // fenêtre des courbes
 let saveTimer = null;
 
-const EMPTY = { bed:null, wake:null, sleepQ:null, cardioMin:null, focusMin:null, clarity:null, mood:null, urge:null };
+const EMPTY = { bed:null, wake:null, sleepQ:null, cardioMin:null, focusMin:null, clarity:null, mood:null, elan:null, urge:null, checksMin:null };
 // "cardio", "focus" et "sleep" sont d'anciens champs : encore lus pour détecter
 // un jour rempli, plus jamais écrits.
-const FIELDS = ["bed","wake","sleepQ","cardioMin","focusMin","clarity","mood","urge","cardio","focus","sleep"];
+const FIELDS = ["bed","wake","sleepQ","cardioMin","focusMin","clarity","mood","elan","urge","checksMin","cardio","focus","sleep"];
 const CARDIO_MIN = 30, FOCUS_MIN = 10;
 
 function load(){
@@ -195,19 +196,22 @@ function stats(w){
   const t = today(), keys = [];
   for(let i=w-1;i>=0;i--) keys.push(addD(t,-i));
   let logged=0, nights=0, cardioSess=0, focusSess=0, cardioVol=0, focusVol=0;
-  const ser = {clarity:[], mood:[], sleepQ:[], urge:[], dur:[]};
+  const ser = {clarity:[], mood:[], elan:[], sleepQ:[], urge:[], dur:[]};
+  let checksVol=0, checksDays=0;
   const beds=[];
   keys.forEach(k=>{
     const d=S.days[k];
-    if(!d){ ser.clarity.push(null); ser.mood.push(null); ser.sleepQ.push(null); ser.urge.push(null); ser.dur.push(null); return; }
+    if(!d){ ser.clarity.push(null); ser.mood.push(null); ser.elan.push(null); ser.sleepQ.push(null); ser.urge.push(null); ser.dur.push(null); return; }
     const touched=FIELDS.some(f=>d[f]!==null&&d[f]!==undefined);
     if(touched) logged++;
     if(typeof d.cardioMin==="number"){ cardioVol+=d.cardioMin; if(d.cardioMin>=CARDIO_MIN) cardioSess++; }
     if(typeof d.focusMin==="number"){ focusVol+=d.focusMin; if(d.focusMin>=FOCUS_MIN) focusSess++; }
+    if(typeof d.checksMin==="number"){ checksVol+=d.checksMin; if(d.checksMin>0) checksDays++; }
     const du=durMin(d); if(du!==null) nights++;
     const bs=bedShift(d.bed); if(bs!==null) beds.push(bs);
     ser.clarity.push(d.clarity!=null?d.clarity:null);
     ser.mood.push(d.mood!=null?d.mood:null);
+    ser.elan.push(d.elan!=null?d.elan:null);
     ser.sleepQ.push(d.sleepQ!=null?d.sleepQ:null);
     ser.urge.push(d.urge!=null?d.urge:null);
     ser.dur.push(du);
@@ -215,8 +219,9 @@ function stats(w){
   const val = a => a.filter(v=>v!==null);
   const pack = a => ({m:mean(val(a)), sd:sd(val(a)), v:masd(a), n:val(a).length});
   return {keys, logged, nights, cardioSess, focusSess, cardioVol, focusVol,
+    checksVol, checksDays,
     bedSD:sd(beds), dur:pack(ser.dur), sq:pack(ser.sleepQ),
-    cl:pack(ser.clarity), mo:pack(ser.mood), ur:pack(ser.urge), ser};
+    cl:pack(ser.clarity), mo:pack(ser.mood), el:pack(ser.elan), ur:pack(ser.urge), ser};
 }
 
 function bilan(){
@@ -237,7 +242,9 @@ function bilan(){
     "Lecture/médit. : "+s.focusSess+" séance(s) ≥"+FOCUS_MIN+" min · "+s.focusVol+" min au total",
     "Clarté : "+pm(s.cl.m,s.cl.sd,"/10")+" · variation j/j "+fmt(s.cl.v),
     "Humeur : "+pm(s.mo.m,s.mo.sd,"/10")+" · variation j/j "+fmt(s.mo.v),
+    "Élan : "+pm(s.el.m,s.el.sd,"/10")+" · variation j/j "+fmt(s.el.v),
     "Pulsion : "+pm(s.ur.m,s.ur.sd,"/10")+" · max "+(s.ur.n?Math.max.apply(null,s.ser.urge.filter(v=>v!==null)):"—")+" · soirs ≥4 : "+s.ser.urge.filter(v=>v!==null&&v>=4).length,
+    "Checks : "+s.checksVol+" min sur "+s.checksDays+" jour(s)",
     "Événements 7 j :"
   ].concat(NAT_ORDER.map(line).filter(Boolean).length ? NAT_ORDER.map(line).filter(Boolean) : ["  aucun"])
    .join("\n");
@@ -331,7 +338,7 @@ function setTime(f, el){
 function nav(n){ const nx=addD(selDay,n); if(nx<=today()) {selDay=nx; render();} }
 
 // Durées : une quantité, pas un verdict. 20 min s'enregistrent comme 20 min.
-const PRESETS = { cardioMin:[0,15,30,45,60], focusMin:[0,5,10,20,30] };
+const PRESETS = { cardioMin:[0,15,30,45,60], focusMin:[0,5,10,20,30], checksMin:[0,5,10,20,30,60] };
 function setDur(f, v){ setField(f, v, true); }
 function askDur(f){
   const cur = dayGet()[f];
@@ -340,7 +347,7 @@ function askDur(f){
   const n = parseInt(r,10);
   if(isFinite(n) && n>=0 && n<=600) setDur(f, n);
 }
-function durHtml(f, label){
+function durHtml(f, label, color){
   const d=dayGet(); const v=d[f];
   const isPreset = PRESETS[f].indexOf(v) !== -1;
   let chips = '<div class="chips pick">';
@@ -349,7 +356,7 @@ function durHtml(f, label){
   });
   chips += '<button class="'+(v!=null&&!isPreset?"on":"")+'" onclick="askDur(\''+f+'\')">…</button></div>';
   return '<div class="card"><div class="srow" style="margin-bottom:0"><span>'+label+'</span>'+
-    '<span class="mono" style="color:'+(v?"var(--teal)":"var(--dim)")+'">'+(v==null?"—":v+" min")+'</span></div>'+
+    '<span class="mono" style="color:'+(v?(color||"var(--teal)"):"var(--dim)")+'">'+(v==null?"—":v+" min")+'</span></div>'+
     chips+'</div>';
 }
 function sliderRow(f,label,cls,color){
@@ -386,7 +393,9 @@ function viewJour(){
     '<div class="label">État du jour</div>'+
     sliderHtml("clarity","Clarté mentale","r-teal","var(--teal)")+
     sliderHtml("mood","Humeur","r-blue","var(--blue)")+
-    sliderHtml("urge","Pression de l\u2019envie","r-amber","var(--amber)");
+    sliderHtml("elan","Élan — envie de faire","r-violet","var(--violet)")+
+    sliderHtml("urge","Pression de l\u2019envie","r-amber","var(--amber)")+
+    durHtml("checksMin","Checks — contenu vu, sans acte","var(--amber)");
 }
 
 const TRIGGERS=["Fatigue","Ennui","Seul le soir","Stress / conflit","Sans raison claire","Autre"];
@@ -406,8 +415,8 @@ function natureOf(e){
 }
 function pickType(t){
   urgeType=t;
-  // Avec partenaire : pas de question de déclencheur, ce n'est pas un symptôme.
-  if(t==="partenaire"){ pushEvent("partenaire", null); return; }
+  // Toutes les natures passent par un écran intermédiaire :
+  // aucun log irréversible en un seul tap.
   render();
 }
 function pickTrig(i){ urgeTrig=TRIGGERS[i]; render(); }
@@ -433,6 +442,11 @@ function viewPulsion(){
          '<span>'+NATURES[k].label+'</span><span class="dot" style="background:'+NATURES[k].css+'"></span></button>';
     });
     h+='</div>';
+  }else if(urgeType==="partenaire"){
+    h+='<div class="card"><div style="font-size:13.5px;color:var(--mut);margin-bottom:12px">Enregistrer « Avec partenaire » — aujourd\u2019hui ?</div>'+
+      '<div class="rowbtns">'+
+      '<button class="btn btn-teal" style="flex:1" onclick="pushEvent(\'partenaire\', null)">Confirmer</button>'+
+      '<button class="btn btn-ghost" style="width:auto;padding:13px 18px" onclick="pickType(null)">Annuler</button></div></div>';
   }else{
     h+='<div class="card"><div style="font-size:13.5px;color:var(--mut)">Déclencheur principal ?</div><div class="chips">';
     TRIGGERS.forEach((t,i)=>{ h+='<button class="'+(urgeTrig===t?"on":"")+'" onclick="pickTrig('+i+')">'+t+'</button>'; });
@@ -501,6 +515,7 @@ function viewDonnees(){
          "<br>coucher "+(s.bedSD==null?"—":"± "+Math.round(s.bedSD)+" min")+" · qualité "+pm(s.sq.m,s.sq.sd,"/10"))+
       st("Cardio", s.cardioSess+" × ≥"+CARDIO_MIN+" min · "+s.cardioVol+" min")+
       st("Lecture / médit.", s.focusSess+" × ≥"+FOCUS_MIN+" min · "+s.focusVol+" min")+
+      st("Checks", s.checksVol+" min · "+s.checksDays+" j")+
     '</div>'+
     '<div class="card">'+
       '<div class="chips win">'+wbtn(14)+wbtn(30)+wbtn(90)+'</div>'+
@@ -511,6 +526,10 @@ function viewDonnees(){
       '<div class="srow" style="margin-bottom:2px"><span class="tiny">Humeur</span>'+
       '<span class="mono" style="font-size:12.5px;color:var(--blue)">'+pm(c.mo.m,c.mo.sd,"/10")+' · var '+fmt(c.mo.v)+'</span></div>'+
       spark("mood","#8ab4d8")+
+      '<div class="sep"></div>'+
+      '<div class="srow" style="margin-bottom:2px"><span class="tiny">Élan</span>'+
+      '<span class="mono" style="font-size:12.5px;color:var(--violet)">'+pm(c.el.m,c.el.sd,"/10")+' · var '+fmt(c.el.v)+'</span></div>'+
+      spark("elan","#ab96d9")+
       '<p class="note">± = dispersion. « var » = variation moyenne d\u2019un jour au suivant : c\u2019est elle qui mesure la stabilité, pas la moyenne.</p>'+
       '<div class="lg">'+NAT_ORDER.map(function(k){
         return '<span><i style="background:'+NATURES[k].css+'"></i>'+NATURES[k].label+'</span>';
