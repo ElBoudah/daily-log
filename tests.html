@@ -105,19 +105,19 @@
   </div>
 
   <div class="card">
-    <div class="t-name">Substitution symboles-chiffres</div>
-    <div class="t-meta">90 s · vitesse de traitement</div>
-    <div class="t-last" id="last-sdmt"></div>
-    <div class="chart" id="ch-sdmt"></div>
-    <div style="margin-top:12px"><button class="btn btn-outline" onclick="startSDMT()">Lancer</button></div>
-  </div>
-
-  <div class="card">
     <div class="t-name">Empan de chiffres inversé</div>
     <div class="t-meta">~2 min · mémoire de travail · hebdomadaire (dimanche)</div>
     <div class="t-last" id="last-span"></div>
     <div class="chart" id="ch-span"></div>
     <div style="margin-top:12px"><button class="btn btn-outline" onclick="startSpan()">Lancer</button></div>
+  </div>
+
+  <div class="card">
+    <div class="t-name">Empan de Corsi</div>
+    <div class="t-meta">~2 min · mémoire visuospatiale · hebdomadaire (dimanche)</div>
+    <div class="t-last" id="last-corsi"></div>
+    <div class="chart" id="ch-corsi"></div>
+    <div style="margin-top:12px"><button class="btn btn-outline" onclick="startCorsi()">Lancer</button></div>
   </div>
 
   <div class="card">
@@ -264,69 +264,8 @@ function runPVT(){
   schedule();
 }
 
-// ---------- 2. Substitution symboles-chiffres ----------
-const SYM = ["■","▲","▼","●","◆","★","✚","✕","≡"];
-function startSDMT(){
-  openStage("Substitution");
-  let key = '<div class="keyrow">';
-  SYM.forEach((s,i)=>{ key += '<div class="keypair"><span class="s">'+s+'</span><span class="d">'+(i+1)+'</span></div>'; });
-  key += '</div>';
-  mid('<div class="stage-title">Vitesse de traitement — 90 s</div>'+key+
-      '<div class="stage-body">Chaque symbole correspond à un chiffre. Un symbole s\'affiche, tape le chiffre correspondant — vite, mais <b>sans erreur</b> : au-delà de 5 % d\'erreurs, la passation ne mesure plus rien et ne compte pas. La grille reste affichée pendant tout le test.</div>'+
-      '<button class="btn btn-teal" style="max-width:300px" id="go">Commencer</button>');
-  document.getElementById("go").onclick = runSDMT;
-}
-function runSDMT(){
-  const DUR = 90000;
-  let correct = 0, errors = 0, cur = -1, done = false;
-  const end = performance.now() + DUR;
-
-  let key = '<div class="keyrow">';
-  SYM.forEach((s,i)=>{ key += '<div class="keypair"><span class="s">'+s+'</span><span class="d">'+(i+1)+'</span></div>'; });
-  key += '</div>';
-  let pad = '<div class="pad">';
-  for(let i=1;i<=9;i++) pad += '<button data-d="'+i+'">'+i+'</button>';
-  pad += '</div>';
-  mid(key+'<div class="glyph mono" id="glyph"></div><div class="flash" id="flash"></div>'+pad);
-
-  const glyph = document.getElementById("glyph"), flash = document.getElementById("flash");
-  const tickTimer = setInterval(()=>setTimerText(mmss(end - performance.now())), 250);
-  setTimerText(mmss(DUR));
-
-  function next(){
-    let i; do { i = Math.floor(Math.random()*SYM.length); } while(i === cur);
-    cur = i; glyph.textContent = SYM[i];
-  }
-  function press(d){
-    if(done) return;
-    if(performance.now() >= end){ finish(); return; }
-    if(d === cur+1){ correct++; flash.textContent = ""; }
-    else { errors++; flash.textContent = "erreur"; setTimeout(()=>{ if(!done) flash.textContent=""; }, 400); }
-    next();
-    if(performance.now() >= end) finish();
-  }
-  document.querySelectorAll(".pad button").forEach(b=>{
-    b.onclick = () => press(Number(b.dataset.d));
-  });
-  function cleanup(){ done = true; clearInterval(tickTimer); }
-  stageCleanup = cleanup;
-  function finish(){
-    cleanup();
-    const total = correct + errors;
-    const errPct = total ? Math.round(errors/total*1000)/10 : 0;
-    const valid = errPct <= 5;
-    const m = { correct, errors, total, errPct, valid };
-    const lines = [
-      "Corrects : <b>"+correct+"</b>",
-      "Erreurs : <b>"+errors+"</b> ("+String(errPct).replace(".",",")+" %)",
-      "Total : <b>"+total+"</b> réponses en 90 s"
-    ];
-    if(!valid) lines.push('<span style="color:var(--amber)">Plus de 5 % d\u2019erreurs : passation enregistrée mais non valide pour la tendance. Refais-la dimanche prochain, en visant zéro erreur.</span>');
-    resultScreen("Substitution terminée", lines, () => addRun("sdmt", m));
-  }
-  next();
-  setTimeout(()=>{ if(!done) finish(); }, DUR + 200);
-}
+// ---------- (SDMT retiré le 11/09 — runs historiques conservés dans l'export
+// et l'historique via fmtRun. Le PVT couvre le versant vitesse.) ----------
 
 // ---------- 2b. Empan de chiffres inversé ----------
 // Mémoire de travail (WAIS-style adaptatif). Séquences aléatoires : pas d'apprentissage
@@ -418,6 +357,109 @@ function runSpan(){
   show();
 }
 
+// ---------- 2c. Empan de Corsi ----------
+// Mémoire de travail visuospatiale — complément du versant phonologique de l'empan
+// de chiffres. Corsi classique = ordre DIRECT. Positions des blocs régénérées à
+// chaque essai (anti-apprentissage spatial). Mêmes règles adaptatives que l'empan :
+// réussite -> +1 ; échec -> second essai ; deux échecs à la même longueur -> fin.
+function startCorsi(){
+  openStage("Corsi");
+  mid('<div class="stage-title">Mémoire visuospatiale — ~2 min</div>'+
+      '<div class="stage-body">Neuf blocs s\'affichent ; certains s\'allument l\'un après l\'autre. Reproduis la séquence en tapant les blocs <b>dans le même ordre</b>. Réussite : la séquence s\'allonge. Deux échecs à la même longueur : fin. Les positions changent à chaque essai — c\'est voulu.</div>'+
+      '<button class="btn btn-teal" style="max-width:300px" id="go">Commencer</button>');
+  document.getElementById("go").onclick = runCorsi;
+}
+function runCorsi(){
+  let len = 3, trial = 1, best = 0, trials = 0, correctN = 0;
+  let timers = [], done = false;
+  function cleanup(){ done = true; timers.forEach(clearTimeout); timers = []; }
+  stageCleanup = cleanup;
+
+  // 9 blocs sur une grille 3×3 de cellules 100 px, avec un jitter par cellule :
+  // positions uniques à chaque essai, sans chevauchement possible.
+  function positions(){
+    const out = [];
+    for(let r=0;r<3;r++) for(let c=0;c<3;c++){
+      out.push({ x: c*100 + 6 + Math.floor(Math.random()*34),
+                 y: r*100 + 6 + Math.floor(Math.random()*34) });
+    }
+    return out;
+  }
+  function sample(n){
+    const idx = [0,1,2,3,4,5,6,7,8];
+    for(let i=idx.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const t=idx[i]; idx[i]=idx[j]; idx[j]=t; }
+    return idx.slice(0,n);
+  }
+  const BASE = "position:absolute;width:54px;height:54px;border-radius:10px;background:var(--card2);border:1px solid var(--line2);";
+
+  function board(pos){
+    let b = '<div id="cboard" style="position:relative;width:306px;height:306px;max-width:100%">';
+    pos.forEach((p,i)=>{ b += '<div id="cb'+i+'" style="'+BASE+'left:'+p.x+'px;top:'+p.y+'px"></div>'; });
+    return b + '</div>';
+  }
+  function lit(i, on){
+    const el = document.getElementById("cb"+i);
+    if(el) el.style.background = on ? "var(--teal)" : "var(--card2)";
+  }
+
+  function show(){
+    setTimerText("longueur "+len+" · essai "+trial+"/2");
+    const pos = positions();
+    const seq = sample(len);
+    mid('<div class="stage-body" id="chint">Regarde…</div>'+board(pos));
+    seq.forEach((bi,i)=>{
+      timers.push(setTimeout(()=>{ if(!done) lit(bi,true); }, 400 + i*850));
+      timers.push(setTimeout(()=>{ if(!done) lit(bi,false); }, 400 + i*850 + 600));
+    });
+    timers.push(setTimeout(()=>{ if(!done) answer(seq); }, 400 + len*850 + 200));
+  }
+
+  function answer(seq){
+    const hint = document.getElementById("chint");
+    if(hint) hint.textContent = "À toi — dans le même ordre.";
+    let entered = [];
+    for(let i=0;i<9;i++){
+      (function(bi){
+        const el = document.getElementById("cb"+bi);
+        if(!el) return;
+        el.onclick = function(){
+          if(done || entered.length >= seq.length) return;
+          entered.push(bi);
+          lit(bi,true);
+          timers.push(setTimeout(()=>{ if(!done) lit(bi,false); }, 220));
+          if(entered.length === seq.length) timers.push(setTimeout(()=>{ if(!done) check(entered, seq); }, 260));
+        };
+      })(i);
+    }
+  }
+
+  function check(entered, seq){
+    trials++;
+    const ok = entered.length===seq.length && entered.every((v,i)=>v===seq[i]);
+    if(ok){ correctN++; best = Math.max(best, len); }
+    mid('<div class="stage-title">'+(ok ? "✓" : "✕")+'</div>'+
+        '<div class="stage-body">'+(ok
+          ? '<span style="color:var(--teal)">Juste — longueur '+len+'.</span>'
+          : '<span style="color:var(--amber)">Raté.</span>')+'</div>');
+    if(ok){ len++; trial = 1; }
+    else if(trial === 1){ trial = 2; }
+    else { finish(); return; }
+    if(len > 9){ finish(); return; }
+    timers.push(setTimeout(()=>{ if(!done) show(); }, 900));
+  }
+
+  function finish(){
+    cleanup();
+    const m = { span: best, trials, correct: correctN };
+    resultScreen("Corsi terminé", [
+      "Empan de Corsi : <b>"+(best || "—")+"</b>",
+      "Essais réussis : <b>"+correctN+"</b> / "+trials,
+      '<span style="color:var(--dim)">Les 2-3 premières passations calibrent la stratégie : la tendance ne compte qu\'après. Comparaison à toi-même uniquement.</span>'
+    ], () => addRun("corsi", m));
+  }
+  show();
+}
+
 // ---------- (Fluence verbale retirée le 30/08 — les runs historiques restent
 // dans l'export et l'historique via fmtRun.) ----------
 
@@ -494,6 +536,7 @@ function fmtRun(r){
   if(r.test === "sdmt") return "Substitution " + m.correct + " corrects · " + m.errors + " err.";
   if(r.test === "phq") return "PHQ-8 " + m.score + "/24 · " + m.band;
   if(r.test === "span") return "Empan inversé " + m.span + " · " + m.correct + "/" + m.trials + " essais";
+  if(r.test === "corsi") return "Corsi " + m.span + " · " + m.correct + "/" + m.trials + " essais";
   return "Fluence " + m.sem + " / " + m.pho;
 }
 function lastOf(test){
@@ -508,14 +551,14 @@ function lastOf(test){
 const CHARTS = {
   pvt:  { title:"Médiane, ms — plus bas = mieux",
           series:[{ get:r=>r.metrics.median, color:"var(--teal)", name:"" }] },
-  sdmt: { title:"Réponses correctes en 90 s — passations >5 % d'erreurs exclues",
-          series:[{ get:r=>(r.metrics.valid===false ? null : r.metrics.correct), color:"var(--blue)", name:"" }] },
+  corsi:{ title:"Empan de Corsi — plus haut = mieux",
+          series:[{ get:r=>r.metrics.span, color:"var(--teal)", name:"" }] },
   span: { title:"Empan inversé — plus haut = mieux",
           series:[{ get:r=>r.metrics.span, color:"var(--amber)", name:"" }] },
   phq:  { title:"Score /24 — plus bas = mieux",
           series:[{ get:r=>r.metrics.score, color:"var(--blue)", name:"" }] }
 };
-const TESTS = ["pvt","sdmt","span","phq"];
+const TESTS = ["pvt","span","corsi","phq"];
 
 function chartHtml(test){
   const cfg = CHARTS[test];

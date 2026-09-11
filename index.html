@@ -49,6 +49,8 @@
   .r-blue::-webkit-slider-thumb{background:var(--blue);} .r-blue::-moz-range-thumb{background:var(--blue);}
   .r-amber::-webkit-slider-thumb{background:var(--amber);} .r-amber::-moz-range-thumb{background:var(--amber);}
   .r-violet::-webkit-slider-thumb{background:var(--violet);} .r-violet::-moz-range-thumb{background:var(--violet);}
+  textarea{width:100%;background:var(--card2);border:1px solid var(--line2);border-radius:9px;color:var(--txt);font:inherit;font-size:13.5px;line-height:1.5;padding:9px 10px;resize:none;box-sizing:border-box;}
+  .cnt{font-size:11px;color:var(--faint);text-align:right;margin-top:4px;}
 
   .timerow{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .tf{display:flex; flex-direction:column; gap:5px;}
@@ -131,10 +133,10 @@ let urgeType = null, urgeTrig = null;
 let win = 14;                 // fenêtre des courbes
 let saveTimer = null;
 
-const EMPTY = { bed:null, wake:null, sleepQ:null, cardioMin:null, focusMin:null, clarity:null, mood:null, elan:null, urge:null, checksMin:null };
+const EMPTY = { bed:null, wake:null, sleepQ:null, cardioMin:null, readMin:null, medMin:null, clarity:null, mood:null, elan:null, urge:null, checksMin:null, acts:null, note:null };
 // "cardio", "focus" et "sleep" sont d'anciens champs : encore lus pour détecter
 // un jour rempli, plus jamais écrits.
-const FIELDS = ["bed","wake","sleepQ","cardioMin","focusMin","clarity","mood","elan","urge","checksMin","cardio","focus","sleep"];
+const FIELDS = ["bed","wake","sleepQ","cardioMin","readMin","medMin","focusMin","clarity","mood","elan","urge","checksMin","acts","note","cardio","focus","sleep"];
 const CARDIO_MIN = 30, FOCUS_MIN = 10;
 
 function load(){
@@ -195,7 +197,8 @@ const pm = (m,d,unit) => m==null ? "—" : fmt(m)+(d==null?"":" ± "+fmt(d))+(un
 function stats(w){
   const t = today(), keys = [];
   for(let i=w-1;i>=0;i--) keys.push(addD(t,-i));
-  let logged=0, nights=0, cardioSess=0, focusSess=0, cardioVol=0, focusVol=0;
+  let logged=0, nights=0, cardioSess=0, cardioVol=0;
+  let readSess=0, readVol=0, medSess=0, medVol=0, actsDays=0;
   const ser = {clarity:[], mood:[], elan:[], sleepQ:[], urge:[], dur:[]};
   let checksVol=0, checksDays=0;
   const beds=[];
@@ -205,7 +208,9 @@ function stats(w){
     const touched=FIELDS.some(f=>d[f]!==null&&d[f]!==undefined);
     if(touched) logged++;
     if(typeof d.cardioMin==="number"){ cardioVol+=d.cardioMin; if(d.cardioMin>=CARDIO_MIN) cardioSess++; }
-    if(typeof d.focusMin==="number"){ focusVol+=d.focusMin; if(d.focusMin>=FOCUS_MIN) focusSess++; }
+    if(typeof d.readMin==="number"){ readVol+=d.readMin; if(d.readMin>=FOCUS_MIN) readSess++; }
+    if(typeof d.medMin==="number"){ medVol+=d.medMin; if(d.medMin>=FOCUS_MIN) medSess++; }
+    if(Array.isArray(d.acts) && d.acts.length) actsDays++;
     if(typeof d.checksMin==="number"){ checksVol+=d.checksMin; if(d.checksMin>0) checksDays++; }
     const du=durMin(d); if(du!==null) nights++;
     const bs=bedShift(d.bed); if(bs!==null) beds.push(bs);
@@ -218,7 +223,8 @@ function stats(w){
   });
   const val = a => a.filter(v=>v!==null);
   const pack = a => ({m:mean(val(a)), sd:sd(val(a)), v:masd(a), n:val(a).length});
-  return {keys, logged, nights, cardioSess, focusSess, cardioVol, focusVol,
+  return {keys, logged, nights, cardioSess, cardioVol,
+    readSess, readVol, medSess, medVol, actsDays,
     checksVol, checksDays,
     bedSD:sd(beds), dur:pack(ser.dur), sq:pack(ser.sleepQ),
     cl:pack(ser.clarity), mo:pack(ser.mood), el:pack(ser.elan), ur:pack(ser.urge), ser};
@@ -239,15 +245,36 @@ function bilan(){
       " · régularité du coucher "+(s.bedSD==null?"—":"± "+Math.round(s.bedSD)+" min")+
       " · qualité "+pm(s.sq.m,s.sq.sd,"/10"),
     "Cardio : "+s.cardioSess+" séance(s) ≥"+CARDIO_MIN+" min · "+s.cardioVol+" min au total",
-    "Lecture/médit. : "+s.focusSess+" séance(s) ≥"+FOCUS_MIN+" min · "+s.focusVol+" min au total",
+    "Lecture : "+s.readSess+" séance(s) ≥"+FOCUS_MIN+" min · "+s.readVol+" min au total",
+    "Méditation : "+s.medSess+" séance(s) ≥"+FOCUS_MIN+" min · "+s.medVol+" min au total",
     "Clarté : "+pm(s.cl.m,s.cl.sd,"/10")+" · variation j/j "+fmt(s.cl.v),
     "Humeur : "+pm(s.mo.m,s.mo.sd,"/10")+" · variation j/j "+fmt(s.mo.v),
     "Élan : "+pm(s.el.m,s.el.sd,"/10")+" · variation j/j "+fmt(s.el.v),
     "Pulsion : "+pm(s.ur.m,s.ur.sd,"/10")+" · max "+(s.ur.n?Math.max.apply(null,s.ser.urge.filter(v=>v!==null)):"—")+" · soirs ≥4 : "+s.ser.urge.filter(v=>v!==null&&v>=4).length,
     "Checks : "+s.checksVol+" min sur "+s.checksDays+" jour(s)",
+    "Activités : "+actsSummary(s.keys),
     "Événements 7 j :"
   ].concat(NAT_ORDER.map(line).filter(Boolean).length ? NAT_ORDER.map(line).filter(Boolean) : ["  aucun"])
+   .concat(notesLines(s.keys))
    .join("\n");
+}
+// Agrégat des tags d'activité sur une fenêtre : "atelier ×2, soirée jeux ×1".
+function actsSummary(keys){
+  const f={};
+  keys.forEach(k=>{
+    const d=S.days[k]; if(!d || !Array.isArray(d.acts)) return;
+    d.acts.forEach(a=>{ const lo=a.toLowerCase(); if(!f[lo]) f[lo]={label:a,n:0}; f[lo].n++; });
+  });
+  const arr=Object.values(f).sort((a,b)=>b.n-a.n);
+  return arr.length ? arr.map(x=>x.label+" ×"+x.n).join(", ") : "aucune";
+}
+function notesLines(keys){
+  const out=[];
+  keys.forEach(k=>{
+    const d=S.days[k];
+    if(d && d.note) out.push("  "+frShort(k)+" : "+d.note);
+  });
+  return out.length ? ["Notes :"].concat(out) : [];
 }
 
 // ---------- Sparkline ----------
@@ -266,7 +293,7 @@ function refreshMarks(){
   const t = readTests();
   MARKS.test = new Set((t && Array.isArray(t.runs) ? t.runs : []).map(r=>r.day).filter(Boolean));
 }
-function spark(field,color){
+function spark(field,color,withActs){
   const s=stats(win), w=280, h=56, p=6, n=s.keys.length;
   const x=i=>p+i/(n-1)*(w-2*p), y=v=>h-p-(v/10)*(h-2*p);
   let path="", prevNull=true, dots="", any=false;
@@ -287,7 +314,17 @@ function spark(field,color){
     const nat = MARKS.nat[k];
     if(nat) marks+='<line x1="'+X+'" x2="'+X+'" y1="'+p+'" y2="'+(h-p)+'" stroke="'+NATURES[nat].color+'" stroke-width="1.6" opacity=".85"/>';
   });
-  return '<svg class="spark" viewBox="0 0 '+w+' '+h+'">'+grid+marks+'<path d="'+path+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'+dots+'</svg>';
+  let acts="";
+  if(withActs){
+    s.keys.forEach((k,i)=>{
+      const d=S.days[k];
+      if(d && Array.isArray(d.acts) && d.acts.length){
+        const X=x(i).toFixed(1);
+        acts+='<line x1="'+X+'" x2="'+X+'" y1="'+(h-3.5)+'" y2="'+(h-0.5)+'" stroke="#8ab4d8" stroke-width="2.4" opacity=".9"/>';
+      }
+    });
+  }
+  return '<svg class="spark" viewBox="0 0 '+w+' '+h+'">'+grid+marks+acts+'<path d="'+path+'" fill="none" stroke="'+color+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'+dots+'</svg>';
 }
 
 // ---------- Rendu ----------
@@ -338,7 +375,7 @@ function setTime(f, el){
 function nav(n){ const nx=addD(selDay,n); if(nx<=today()) {selDay=nx; render();} }
 
 // Durées : une quantité, pas un verdict. 20 min s'enregistrent comme 20 min.
-const PRESETS = { cardioMin:[0,15,30,45,60], focusMin:[0,5,10,20,30], checksMin:[0,5,10,20,30,60] };
+const PRESETS = { cardioMin:[0,15,30,45,60], readMin:[0,5,10,20,30], medMin:[0,5,10,20,30], checksMin:[0,5,10,20,30,60] };
 function setDur(f, v){ setField(f, v, true); }
 function askDur(f){
   const cur = dayGet()[f];
@@ -369,6 +406,66 @@ function sliderRow(f,label,cls,color){
 function sliderHtml(f,label,cls,color){
   return '<div class="card">'+sliderRow(f,label,cls,color)+'</div>';
 }
+// Tags libres : la taxonomie émerge de l'usage. Suggestions = les plus fréquents
+// de l'historique, pour que "atelier" reste "atelier" et pas quatre variantes.
+function escHtml(s){ return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function tagFreq(){
+  const f={};
+  Object.keys(S.days).forEach(k=>{
+    const d=S.days[k]; if(!d || !Array.isArray(d.acts)) return;
+    d.acts.forEach(a=>{ const lo=a.toLowerCase(); if(!f[lo]) f[lo]={label:a,n:0}; f[lo].n++; });
+  });
+  return f;
+}
+function actsToday(){ const d=dayGet(); return Array.isArray(d.acts)?d.acts:[]; }
+function toggleActEnc(el){
+  const tag = decodeURIComponent(el.dataset.tag);
+  const cur = actsToday().slice();
+  const i = cur.findIndex(a=>a.toLowerCase()===tag.toLowerCase());
+  if(i>=0) cur.splice(i,1); else cur.push(tag);
+  setField("acts", cur.length?cur:null, true);
+}
+function askAct(){
+  const r = prompt("Activité ? (ex : atelier, soirée jeux, resto)");
+  if(r===null) return;
+  const t = r.trim().replace(/\s+/g," ").slice(0,30);
+  if(!t) return;
+  const cur = actsToday().slice();
+  if(!cur.some(a=>a.toLowerCase()===t.toLowerCase())) cur.push(t);
+  setField("acts", cur, true);
+}
+function actsHtml(){
+  const sel = actsToday();
+  const f = tagFreq();
+  const top = Object.values(f).sort((a,b)=>b.n-a.n).slice(0,6).map(x=>x.label);
+  const shown = [];
+  top.forEach(t=>{ if(!shown.some(a=>a.toLowerCase()===t.toLowerCase())) shown.push(t); });
+  sel.forEach(t=>{ if(!shown.some(a=>a.toLowerCase()===t.toLowerCase())) shown.push(t); });
+  let chips = '<div class="chips pick">';
+  shown.forEach(t=>{
+    const on = sel.some(a=>a.toLowerCase()===t.toLowerCase());
+    chips += '<button class="'+(on?"on":"")+'" data-tag="'+encodeURIComponent(t)+'" onclick="toggleActEnc(this)">'+escHtml(t)+'</button>';
+  });
+  chips += '<button onclick="askAct()">+</button></div>';
+  return '<div class="card"><div class="srow" style="margin-bottom:0"><span>Activités du jour</span>'+
+    '<span class="mono" style="color:'+(sel.length?'var(--blue)':'var(--dim)')+'">'+(sel.length||"—")+'</span></div>'+
+    chips+
+    (Object.keys(f).length? '' : '<p class="note" style="margin-top:8px">Sorties, atelier, sport collectif, resto… Tape + pour créer tes propres tags ; ils te seront reproposés ensuite.</p>')+
+    '</div>';
+}
+function noteInput(el){
+  const v = el.value.slice(0,140);
+  setField("note", v.trim()?v:null, false);
+  const c=document.getElementById("note-cnt"); if(c) c.textContent = v.length+"/140";
+}
+function noteHtml(){
+  const d=dayGet(); const v=d.note||"";
+  return '<div class="card"><div class="srow" style="margin-bottom:8px"><span>Note du jour</span>'+
+    '<span class="tiny" style="color:var(--faint)">optionnelle</span></div>'+
+    '<textarea rows="2" maxlength="140" placeholder="Un événement, un contexte — une phrase suffit." '+
+    'oninput="noteInput(this)" onblur="flushSave()">'+escHtml(v)+'</textarea>'+
+    '<div class="cnt" id="note-cnt">'+v.length+'/140</div></div>';
+}
 function sleepHtml(){
   const d=dayGet();
   return '<div class="card"><div class="timerow">'+
@@ -389,13 +486,17 @@ function viewJour(){
     '<div class="label">Sommeil</div>'+ sleepHtml()+
     '<div class="label">Non-négociables</div>'+
     durHtml("cardioMin","Cardio")+
-    durHtml("focusMin","Lecture ou méditation")+
+    durHtml("readMin","Lecture")+
+    durHtml("medMin","Méditation")+
     '<div class="label">État du jour</div>'+
     sliderHtml("clarity","Clarté mentale","r-teal","var(--teal)")+
     sliderHtml("mood","Humeur","r-blue","var(--blue)")+
     sliderHtml("elan","Élan — envie de faire","r-violet","var(--violet)")+
     sliderHtml("urge","Pression de l\u2019envie","r-amber","var(--amber)")+
-    durHtml("checksMin","Checks — contenu vu, sans acte","var(--amber)");
+    durHtml("checksMin","Checks — contenu vu, sans acte","var(--amber)")+
+    '<div class="label">Journée</div>'+
+    actsHtml()+
+    noteHtml();
 }
 
 const TRIGGERS=["Fatigue","Ennui","Seul le soir","Stress / conflit","Sans raison claire","Autre"];
@@ -514,7 +615,9 @@ function viewDonnees(){
       st("Sommeil", (s.dur.m==null?"—":hm(s.dur.m)+(s.dur.sd==null?"":" ± "+Math.round(s.dur.sd)+" min"))+
          "<br>coucher "+(s.bedSD==null?"—":"± "+Math.round(s.bedSD)+" min")+" · qualité "+pm(s.sq.m,s.sq.sd,"/10"))+
       st("Cardio", s.cardioSess+" × ≥"+CARDIO_MIN+" min · "+s.cardioVol+" min")+
-      st("Lecture / médit.", s.focusSess+" × ≥"+FOCUS_MIN+" min · "+s.focusVol+" min")+
+      st("Lecture", s.readSess+" × ≥"+FOCUS_MIN+" min · "+s.readVol+" min")+
+      st("Méditation", s.medSess+" × ≥"+FOCUS_MIN+" min · "+s.medVol+" min")+
+      st("Activités", s.actsDays+" j avec ≥1")+
       st("Checks", s.checksVol+" min · "+s.checksDays+" j")+
     '</div>'+
     '<div class="card">'+
@@ -525,15 +628,19 @@ function viewDonnees(){
       '<div class="sep"></div>'+
       '<div class="srow" style="margin-bottom:2px"><span class="tiny">Humeur</span>'+
       '<span class="mono" style="font-size:12.5px;color:var(--blue)">'+pm(c.mo.m,c.mo.sd,"/10")+' · var '+fmt(c.mo.v)+'</span></div>'+
-      spark("mood","#8ab4d8")+
+      spark("mood","#8ab4d8",true)+
       '<div class="sep"></div>'+
       '<div class="srow" style="margin-bottom:2px"><span class="tiny">Élan</span>'+
       '<span class="mono" style="font-size:12.5px;color:var(--violet)">'+pm(c.el.m,c.el.sd,"/10")+' · var '+fmt(c.el.v)+'</span></div>'+
-      spark("elan","#ab96d9")+
+      spark("elan","#ab96d9",true)+
+      '<div class="sep"></div>'+
+      '<div class="srow" style="margin-bottom:2px"><span class="tiny">Pression de l\u2019envie</span>'+
+      '<span class="mono" style="font-size:12.5px;color:var(--amber)">'+pm(c.ur.m,c.ur.sd,"/10")+' · var '+fmt(c.ur.v)+'</span></div>'+
+      spark("urge","#e09f3e")+
       '<p class="note">± = dispersion. « var » = variation moyenne d\u2019un jour au suivant : c\u2019est elle qui mesure la stabilité, pas la moyenne.</p>'+
       '<div class="lg">'+NAT_ORDER.map(function(k){
         return '<span><i style="background:'+NATURES[k].css+'"></i>'+NATURES[k].label+'</span>';
-      }).join("")+'<span><i style="background:var(--faint)"></i>test</span></div>'+
+      }).join("")+'<span><i style="background:var(--faint)"></i>test</span><span><i style="background:#8ab4d8"></i>jour avec activité</span></div>'+
     '</div>'+
     '<div class="card">'+
       '<div class="tiny" style="margin-bottom:6px">Derniers événements</div>'+
