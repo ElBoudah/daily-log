@@ -614,6 +614,7 @@ function renderHome(){
 }
 
 renderHome();
+if(navigator.storage && navigator.storage.persist) navigator.storage.persist();
 </script>
 </body>
 </html>

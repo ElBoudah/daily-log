@@ -563,9 +563,11 @@ function viewPulsion(){
 function readTests(){
   try{ const r=localStorage.getItem(TESTS_KEY); return r?JSON.parse(r):null; }catch(e){ return null; }
 }
+function bundleJson(){
+  return JSON.stringify({ format:"suivi-export-1", exportedAt:new Date().toISOString(), suivi:S, tests:readTests() }, null, 1);
+}
 function exportAll(){
-  const bundle = { format:"suivi-export-1", exportedAt:new Date().toISOString(), suivi:S, tests:readTests() };
-  const blob=new Blob([JSON.stringify(bundle,null,1)],{type:"application/json"});
+  const blob=new Blob([bundleJson()],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
   a.download="suivi-"+today()+".json"; a.click(); URL.revokeObjectURL(a.href);
 }
@@ -651,14 +653,148 @@ function viewDonnees(){
       '<div class="rowbtns" style="margin-top:10px">'+
       '<button class="btn btn-ghost" style="flex:1" onclick="exportAll()">Exporter tout</button>'+
       '<button class="btn btn-ghost" style="flex:1" onclick="document.getElementById(\'imp\').click()">Importer</button></div>'+
+      '<div class="rowbtns" style="margin-top:10px">'+
+      '<button class="btn btn-ghost" style="flex:1" onclick="cloudSetup()">Config. cloud</button>'+
+      '<button class="btn btn-ghost" style="flex:1" onclick="cloudRestoreUI()">Restaurer cloud</button></div>'+
+      '<p class="note" style="margin-top:6px">'+cloudStatus()+'</p>'+
       '<input type="file" id="imp" accept=".json" onchange="importAll(this)">'+
       '<a class="link" href="tests.html">Tests cognitifs ›</a>'+
-      '<p class="note">Rendez-vous fixe : dimanche soir, bilan copié dans la conversation. « Exporter tout » sort le suivi et les tests dans un seul fichier — données locales à ce téléphone uniquement, pense au backup.</p>'+
+      '<p class="note">Rendez-vous fixe : dimanche soir, bilan copié dans la conversation. Backups automatiques : fichier daté dans Téléchargements + push chiffré vers le cloud, une fois par jour au premier lancement. « Exporter tout » reste pour les envois manuels.</p>'+
     '</div>';
 }
 
 const hash0 = (location.hash||"").replace("#","");
 if(["jour","pulsion","donnees"].indexOf(hash0) !== -1) tab = hash0;
+
+
+// ============================================================
+// Backup automatique — deux couches, zéro action au quotidien :
+// 1) local : un fichier daté dans Téléchargements, au premier
+//    lancement de chaque jour ;
+// 2) cloud : le même bundle, chiffré côté client (AES-GCM),
+//    poussé sur un Gist GitHub privé. Config unique (token +
+//    passphrase) partagée entre les apps du même domaine.
+// Push-only : le cloud est un backup, pas une synchro.
+// ============================================================
+function _b64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function _ub64(s){ return Uint8Array.from(atob(s), c => c.charCodeAt(0)); }
+async function _deriveKey(pass, salt){
+  const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(pass), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name:"PBKDF2", salt, iterations:150000, hash:"SHA-256" },
+    km, { name:"AES-GCM", length:256 }, false, ["encrypt","decrypt"]);
+}
+async function encryptText(pass, text){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key  = await _deriveKey(pass, salt);
+  const ct   = await crypto.subtle.encrypt({ name:"AES-GCM", iv }, key, new TextEncoder().encode(text));
+  return JSON.stringify({ v:1, kdf:"PBKDF2-150k", salt:_b64(salt), iv:_b64(iv), data:_b64(ct) });
+}
+async function decryptText(pass, packed){
+  const p   = JSON.parse(packed);
+  const key = await _deriveKey(pass, _ub64(p.salt));
+  const pt  = await crypto.subtle.decrypt({ name:"AES-GCM", iv:_ub64(p.iv) }, key, _ub64(p.data));
+  return new TextDecoder().decode(pt);
+}
+function _cloudConfig(interactive){
+  let token = localStorage.getItem("cloud_token");
+  let pass  = localStorage.getItem("cloud_pass");
+  if((!token || !pass) && interactive){
+    token = (prompt("Token GitHub (portée Gists uniquement) :") || "").trim();
+    pass  = (prompt("Passphrase de chiffrement (à noter précieusement !) :") || "").trim();
+    if(token && pass){
+      localStorage.setItem("cloud_token", token);
+      localStorage.setItem("cloud_pass", pass);
+    }
+  }
+  return (token && pass) ? { token, pass, gistId: localStorage.getItem("cloud_gist") } : null;
+}
+async function _gistApi(method, path, token, body){
+  const r = await fetch("https://api.github.com" + path, {
+    method,
+    headers: { "Authorization":"Bearer "+token, "Accept":"application/vnd.github+json", "Content-Type":"application/json" },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  if(!r.ok) throw new Error("Gist API " + r.status);
+  return r.json();
+}
+async function cloudBackup(appName, getJson, opts){
+  opts = opts || {};
+  try{
+    const today = new Date().toISOString().slice(0,10);
+    const mark  = "cloud_last_" + appName;
+    if(localStorage.getItem(mark) === today && !opts.force) return "déjà fait";
+    const cfg = _cloudConfig(!!opts.interactive);
+    if(!cfg) return "non configuré";
+    const enc  = await encryptText(cfg.pass, getJson());
+    const file = appName + ".enc.json";
+    if(!cfg.gistId){
+      const g = await _gistApi("POST", "/gists", cfg.token, {
+        description: "Backups chiffrés PWA (AES-GCM, illisible sans passphrase)",
+        public: false, files: { [file]: { content: enc } }
+      });
+      localStorage.setItem("cloud_gist", g.id);
+    } else {
+      await _gistApi("PATCH", "/gists/" + cfg.gistId, cfg.token, { files: { [file]: { content: enc } } });
+    }
+    localStorage.setItem(mark, today);
+    return "ok";
+  }catch(e){ console.warn("[cloud] backup échoué :", e); return "erreur : " + e.message; }
+}
+async function cloudRestore(appName){
+  const cfg = _cloudConfig(true);
+  if(!cfg) throw new Error("cloud non configuré");
+  let gid = cfg.gistId;
+  if(!gid){
+    gid = (prompt("ID du gist de backup (visible dans l'URL du gist) :") || "").trim();
+    if(!gid) throw new Error("pas d'ID de gist");
+    localStorage.setItem("cloud_gist", gid);
+  }
+  const g = await _gistApi("GET", "/gists/" + gid, cfg.token);
+  const f = g.files[appName + ".enc.json"];
+  if(!f) throw new Error("aucun backup " + appName + " dans ce gist");
+  const content = f.truncated ? await (await fetch(f.raw_url)).text() : f.content;
+  return decryptText(cfg.pass, content);
+}
+function autoBackup(appName, getJson){
+  try{
+    const today = new Date().toISOString().slice(0,10);
+    const mark  = appName + "_lastBk";
+    if(localStorage.getItem(mark) === today) return;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([getJson()], { type:"application/json" }));
+    a.download = appName + "_" + today + ".json";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    localStorage.setItem(mark, today);
+  }catch(e){ /* jamais bloquant */ }
+}
+// --- Actions UI (onglet Données) ---
+function cloudSetup(){
+  cloudBackup("suivi", bundleJson, { interactive:true, force:true })
+    .then(r => flash(r === "ok" ? "Cloud configuré — premier backup poussé." : "Cloud : " + r));
+}
+function cloudRestoreUI(){
+  if(!confirm("Restaurer depuis le cloud ? Les données actuelles de ce téléphone seront remplacées.")) return;
+  cloudRestore("suivi").then(json => {
+    const d = JSON.parse(json);
+    if(d && d.suivi && d.suivi.days){
+      S = d.suivi;
+      if(d.tests) localStorage.setItem(TESTS_KEY, JSON.stringify(d.tests));
+      save(); render(); flash("Restauré depuis le cloud (" + (d.exportedAt||"").slice(0,10) + ").");
+    } else flash("Backup cloud invalide.");
+  }).catch(e => flash("Restauration échouée : " + e.message));
+}
+function cloudStatus(){
+  const cfg = localStorage.getItem("cloud_token") && localStorage.getItem("cloud_pass");
+  const last = localStorage.getItem("cloud_last_suivi");
+  return cfg ? (last ? "cloud ✓ dernier push " + last : "cloud configuré, pas encore de push") : "cloud non configuré";
+}
+// --- Anti-éviction Android + déclenchement quotidien ---
+if(navigator.storage && navigator.storage.persist) navigator.storage.persist();
+autoBackup("suivi", bundleJson);
+cloudBackup("suivi", bundleJson, {});   // silencieux : ne demande rien si non configuré
+
 render();
 if("serviceWorker" in navigator){ navigator.serviceWorker.register("sw.js").catch(()=>{}); }
 </script>
